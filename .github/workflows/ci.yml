@@ -7,29 +7,66 @@ on:
     branches: [ "main", "dev" ]
 
 jobs:
-  lint-and-test:
+  # PHASE 1 : Quality Gate (Pre-commit)
+  quality-gate:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-      with:
-        enable-cache: true
-        python-version: '3.13'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: '3.13'
 
-    - name: Install dependencies
-      run: uv sync --all-groups
+      - name: Install dependencies
+        run: uv sync --all-groups
 
-    - name: Lint with Ruff
-      run: uv run ruff check src/
+      - name: Run Pre-commit hooks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
 
-    - name: Check formatting with Ruff
-      run: uv run ruff format --check src/
+  # PHASE 2 : Analyse statique profonde (Mypy & Bandit)
+  security-and-types:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-    - name: Run tests
-      run: |
-        export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-        uv run pytest
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Type Checking (Mypy)
+        run: uv run mypy src/
+
+      - name: Security Scan (Bandit)
+        run: uv run bandit -r src/ -ll
+
+  # PHASE 2 : Tests unitaires
+  tests:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run tests with coverage
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+          uv run pytest --cov=src --cov-report=xml
