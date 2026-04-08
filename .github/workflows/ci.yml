@@ -20,8 +20,11 @@ jobs:
           enable-cache: true
           python-version: '3.13'
 
+      - name: Install dependencies
+        run: uv sync --all-groups
+
       - name: Run Pre-commit hooks
-        uses: pre-commit/action@v3.0.1
+        run: uv run pre-commit run --all-files --show-diff-on-failure
 
   # PHASE 2 : Analyse statique profonde (Mypy & Bandit)
   security-and-types:
