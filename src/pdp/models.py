@@ -15,7 +15,8 @@ class EvenementPdp(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     id_facture: int = Field(foreign_key="facture.id")
-    id_statut_facture: int = Field(foreign_key="statut_facture.id")
+    id_statut_avant: int | None = Field(default=None, foreign_key="statut_facture.id")
+    id_statut_apres: int = Field(foreign_key="statut_facture.id")
 
     source: str | None = Field(default=None, max_length=100)
     message: str | None = Field(default=None, sa_column=Column(Text))
@@ -23,36 +24,47 @@ class EvenementPdp(SQLModel, table=True):
 
     # relations
     facture: "Facture" = Relationship()
-    statut_ref: "StatutFacture" = Relationship()
+    statut_avant: "StatutFacture" = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[EvenementPdp.id_statut_avant]"}
+    )
+    statut_apres: "StatutFacture" = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[EvenementPdp.id_statut_apres]"}
+    )
 
 
-class StatutEReporting(SQLModel, table=True):
-    __tablename__ = "statut_e_reporting"
+class StatutDeclaration(SQLModel, table=True):
+    __tablename__ = "statut_declaration"
 
     id: int | None = Field(default=None, primary_key=True)
     libelle: str = Field(unique=True, max_length=50)
     description: str | None = Field(default=None, sa_column=Column(Text))
 
     # relation inverse
-    e_reportings: list["EReporting"] = Relationship(back_populates="statut_ref")
+    declarations: list["Declaration"] = Relationship(back_populates="statut_ref")
 
 
-class EReporting(SQLModel, table=True):
-    __tablename__ = "e_reporting"
+class Declaration(SQLModel, table=True):
+    __tablename__ = "declaration"
 
     id: int | None = Field(default=None, primary_key=True)
     id_abonnement: int = Field(foreign_key="abonnement.id")
 
-    periode_debut: date
-    periode_fin: date
+    periode_debut: date = Field(...)
+    periode_fin: date = Field(...)
     montant_ht: Decimal = Field(max_digits=12, decimal_places=2)
     montant_tva: Decimal = Field(max_digits=12, decimal_places=2)
+    montant_ttc: Decimal = Field(
+        max_digits=12, decimal_places=2
+    )  # contrôle de cohérence TVA
 
-    id_statut_reporting: int = Field(foreign_key="statut_e_reporting.id")
+    id_statut_declaration: int = Field(foreign_key="statut_declaration.id")
 
+    reference_envoi: str | None = Field(
+        default=None, max_length=100
+    )  # accusé de réception PDP/PPF
     date_envoi: datetime | None = Field(default=None)
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # relations
     abonnement: "Abonnement" = Relationship()
-    statut_ref: "StatutEReporting" = Relationship(back_populates="e_reportings")
+    statut_ref: "StatutDeclaration" = Relationship(back_populates="declarations")

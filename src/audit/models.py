@@ -10,9 +10,9 @@ if TYPE_CHECKING:
 
 
 class AuditAction(str, Enum):
-    CREATE = "CREATE"
-    UPDATE = "UPDATE"
-    DELETE = "DELETE"
+    CREATION = "CRÉATION"
+    MODIFICATION = "MODIFICATION"
+    SUPPRESSION = "SUPPRESSION"
 
 
 class JournalAudit(SQLModel, table=True):
@@ -32,7 +32,7 @@ class JournalAudit(SQLModel, table=True):
         default=None, sa_column=Column(JSON)
     )
 
-    ip_address: str | None = Field(default=None, max_length=45)
+    adresse_ip: str | None = Field(default=None, max_length=45)
     date_action: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # relations

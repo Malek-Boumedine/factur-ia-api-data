@@ -9,9 +9,9 @@ if TYPE_CHECKING:
     from src.utilisateurs.models import Utilisateur
 
 
-class NotificationCanal(str, Enum):
-    IN_APP = "in_app"
-    EMAIL = "email"
+class CanalNotification(str, Enum):
+    DANS_APP = "dans_app"
+    COURRIEL = "email"
 
 
 class TypeNotification(SQLModel, table=True):
@@ -33,9 +33,12 @@ class Notification(SQLModel, table=True):
     id_type: int = Field(foreign_key="type_notification.id")
 
     message: str = Field(sa_column=Column(Text))
-    canal: NotificationCanal
+    canal: CanalNotification = Field(default=CanalNotification.DANS_APP)
     est_lu: bool = Field(default=False)
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    date_lecture: datetime | None = Field(default=None)
+    lien_action: str | None = Field(default=None, max_length=255)
+    date_expiration: datetime | None = Field(default=None)
 
     # relations
     utilisateur: "Utilisateur" = Relationship()

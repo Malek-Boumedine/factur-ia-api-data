@@ -223,5 +223,5 @@ __marimo__/
 *.tfvars.json
 
 # ajouts manuels
-todo.md
+todo*
 local_ci.sh
