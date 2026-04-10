@@ -26,7 +26,7 @@ jobs:
       - name: Run Pre-commit hooks
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
-  # PHASE 2 : Analyse statique profonde (Mypy & Bandit)
+  # PHASE 2 : Analyse statique (Mypy & Bandit)
   security-and-types:
     needs: quality-gate
     runs-on: ubuntu-latest
@@ -49,7 +49,7 @@ jobs:
       - name: Security Scan (Bandit)
         run: uv run bandit -r src/ -ll
 
-  # PHASE 2 : Tests unitaires
+  # PHASE 3 : Tests unitaires
   tests:
     needs: quality-gate
     runs-on: ubuntu-latest
@@ -67,6 +67,10 @@ jobs:
         run: uv sync --all-groups
 
       - name: Run tests with coverage
-        run: |
-          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-          uv run pytest --cov=src --cov-report=xml
+        run: uv run pytest --cov=src --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
