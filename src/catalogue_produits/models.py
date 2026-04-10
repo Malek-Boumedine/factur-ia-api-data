@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from src.utilisateurs.models import Utilisateur
 
 
-class ProductType(str, Enum):
+class TypeProduits(str, Enum):
     ARTICLE = "article"
     PRESTATION = "prestation"
 
@@ -26,7 +26,7 @@ class Catalogue(SQLModel, table=True):
     id_utilisateur: int = Field(foreign_key="utilisateur.id")
     id_taux_tva: int = Field(foreign_key="taux_tva.id")
 
-    type: ProductType = Field(default=ProductType.ARTICLE)
+    type_produit: TypeProduits = Field(default=TypeProduits.ARTICLE)
     reference: str | None = Field(default=None, max_length=100)
     designation: str = Field(max_length=255)
 

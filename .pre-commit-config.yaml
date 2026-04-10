@@ -23,6 +23,8 @@ repos:
         additional_dependencies:
           - sqlmodel
           - fastapi
+          - "pydantic>=2.10.0"
+          - "pydantic-settings>=2.7.0"
           - types-psycopg2
 
   - repo: https://github.com/Yelp/detect-secrets

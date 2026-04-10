@@ -3,7 +3,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, TEXT, Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from src.utilisateurs.models import Utilisateur
 
 
-class FactureType(str, Enum):
+class TypeFacture(str, Enum):
     FACTURE = "facture"
     AVOIR = "avoir"
 
@@ -32,7 +32,7 @@ class StatutFacture(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     libelle: str = Field(unique=True, max_length=50)
-    description: str | None = Field(default=None)
+    description: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
 
 
 class Facture(SQLModel, table=True):
@@ -40,15 +40,15 @@ class Facture(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     id_abonnement: int = Field(foreign_key="abonnement.id")
-    id_utilisateur: int = Field(foreign_key="utilisateur.id")
+    id_createur: int = Field(foreign_key="utilisateur.id")
     id_client: int | None = Field(default=None, foreign_key="client.id")
     id_document: int | None = Field(default=None, foreign_key="document.id")
 
-    numero_facture: str = Field(index=True, max_length=50)
+    numero_facture: str = Field(unique=True, index=True, max_length=50)
     date_emission: date = Field(default_factory=date.today)
     date_echeance: date | None = Field(default=None)
     devise: str = Field(default="EUR", max_length=3)
-    type: FactureType = Field(default=FactureType.FACTURE)
+    type_facture: TypeFacture = Field(default=TypeFacture.FACTURE)
     id_statut: int = Field(foreign_key="statut_facture.id")
 
     # snapshots
@@ -67,8 +67,12 @@ class Facture(SQLModel, table=True):
 
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
     date_modification: datetime | None = Field(
-        default=None, sa_column_kwargs={"onupdate": lambda: datetime.now(UTC)}
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True), nullable=True, onupdate=lambda: datetime.now(UTC)
+        ),
     )
+    notes: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
 
     ## relations
     lignes: list["FactureLigne"] = Relationship(back_populates="facture")
@@ -85,6 +89,7 @@ class FactureLigne(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     id_facture: int = Field(foreign_key="facture.id")
 
+    ordre: int = Field(default=0)
     designation: str = Field(max_length=255)
     quantite: Decimal = Field(max_digits=10, decimal_places=3)
     unite: str | None = Field(default=None, max_length=50)
@@ -104,10 +109,12 @@ class Avoir(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     id_facture_origine: int = Field(foreign_key="facture.id")
+    id_abonnement: int = Field(foreign_key="abonnement.id")
+    id_createur: int = Field(foreign_key="utilisateur.id")
 
     numero_avoir: str = Field(unique=True, max_length=50)
     date_emission: date = Field(default_factory=date.today)
-    motif: str | None = Field(default=None)
+    motif: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
 
     total_ht: Decimal = Field(max_digits=12, decimal_places=2)
     total_tva: Decimal = Field(max_digits=12, decimal_places=2)
@@ -116,3 +123,25 @@ class Avoir(SQLModel, table=True):
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     facture_origine: "Facture" = Relationship()
+    abonnement: "Abonnement" = Relationship()
+    createur: "Utilisateur" = Relationship()
+
+
+class Paiement(SQLModel, table=True):
+    __tablename__ = "paiement"
+
+    id: int | None = Field(default=None, primary_key=True)
+    id_facture: int = Field(foreign_key="facture.id")
+    id_createur: int = Field(foreign_key="utilisateur.id")
+
+    montant: Decimal = Field(max_digits=12, decimal_places=2)
+    date_paiement: date = Field(default_factory=date.today)
+    mode_paiement: str = Field(max_length=50)
+    reference: str | None = Field(
+        default=None, max_length=100
+    )  # n° chèque, virement ...
+    notes: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    facture: "Facture" = Relationship()
+    createur: "Utilisateur" = Relationship()

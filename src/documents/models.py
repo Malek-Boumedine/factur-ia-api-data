@@ -12,13 +12,13 @@ if TYPE_CHECKING:
     from src.utilisateurs.models import Utilisateur
 
 
-class DocumentStatus(str, Enum):
+class StatutDocument(str, Enum):
     EN_ATTENTE = "en_attente"
     TRAITE = "traité"
     ERREUR = "erreur"
 
 
-class ExtractionStatus(str, Enum):
+class StatutExtraction(str, Enum):
     SUCCES = "succès"
     ECHEC = "échec"
 
@@ -32,7 +32,7 @@ class Document(SQLModel, table=True):
 
     nom_fichier: str = Field(max_length=255)
     date_chargement: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    statut: DocumentStatus = Field(default=DocumentStatus.EN_ATTENTE)
+    statut: StatutDocument = Field(default=StatutDocument.EN_ATTENTE)
 
     # relations
     abonnement: "Abonnement" = Relationship()
@@ -51,7 +51,7 @@ class ExtractionOcr(SQLModel, table=True):
         default=None, max_digits=5, decimal_places=2
     )
     date_extraction: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    statut: ExtractionStatus
+    statut: StatutExtraction = Field(default=StatutExtraction.ECHEC)
 
     id_facture: int | None = Field(default=None, foreign_key="facture.id")
 
