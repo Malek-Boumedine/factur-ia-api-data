@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, Relationship, SQLModel
@@ -36,4 +36,4 @@ class JournalAudit(SQLModel, table=True):
     date_action: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # relations
-    utilisateur: "Utilisateur" | None = Relationship()
+    utilisateur: Optional["Utilisateur"] = Relationship()

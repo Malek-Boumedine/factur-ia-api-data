@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import JSON, TEXT, Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
@@ -79,8 +79,8 @@ class Facture(SQLModel, table=True):
     statut_ref: "StatutFacture" = Relationship()
     createur: "Utilisateur" = Relationship()
     abonnement: "Abonnement" = Relationship()
-    client: "Client" | None = Relationship()
-    document: "Document" | None = Relationship()
+    client: Optional["Client"] = Relationship()
+    document: Optional["Document"] = Relationship()
 
 
 class FactureLigne(SQLModel, table=True):

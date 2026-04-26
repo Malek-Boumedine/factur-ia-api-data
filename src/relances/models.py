@@ -1,9 +1,11 @@
 from datetime import UTC, datetime
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship, SQLModel
+
+from src.notifications.models import CanalNotification
 
 if TYPE_CHECKING:
     from src.abonnements.models import Abonnement
@@ -65,5 +67,5 @@ class Relance(SQLModel, table=True):
 
     # relations
     facture: "Facture" = Relationship()
-    modele: "ModeleRelance" | None = Relationship(back_populates="relances")
-    utilisateur: "Utilisateur" | None = Relationship()
+    modele: Optional["ModeleRelance"] = Relationship(back_populates="relances")
+    utilisateur: Optional["Utilisateur"] = Relationship()

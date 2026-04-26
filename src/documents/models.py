@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, Relationship, SQLModel
@@ -57,4 +57,4 @@ class ExtractionOcr(SQLModel, table=True):
 
     # relations
     document: "Document" = Relationship(back_populates="extractions")
-    facture: "Facture" | None = Relationship()
+    facture: Optional["Facture"] = Relationship()
