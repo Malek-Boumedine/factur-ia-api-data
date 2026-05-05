@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.abonnements.router import router as abonnement_router
 from src.auth.router import router as auth_router
 from src.clients.router import router as clients_router
 from src.core.config import settings
@@ -41,6 +42,7 @@ def get_application() -> FastAPI:
 
     _app.include_router(auth_router)
     _app.include_router(clients_router)
+    _app.include_router(abonnement_router)
 
     return _app
 
