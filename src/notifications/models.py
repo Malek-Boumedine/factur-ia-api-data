@@ -32,7 +32,7 @@ class Notification(SQLModel, table=True):
     id_utilisateur: int = Field(foreign_key="utilisateur.id")
     id_type: int = Field(foreign_key="type_notification.id")
 
-    message: str = Field(sa_column=Column(Text))
+    message: str = Field(sa_column=Column(Text, nullable=False))
     canal: CanalNotification = Field(default=CanalNotification.DANS_APP)
     est_lu: bool = Field(default=False)
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))

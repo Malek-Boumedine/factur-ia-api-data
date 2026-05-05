@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
@@ -41,11 +41,12 @@ class Client(SQLModel, table=True):
     date_desactivation: datetime | None = Field(default=None)
 
     # Relations
-    ville: "Ville" | None = Relationship(back_populates="clients")
-    createur: "Utilisateur" | None = Relationship(
+    ville: Optional["Ville"] = Relationship(back_populates="clients")
+
+    createur: Optional["Utilisateur"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Client.id_createur]"}
     )
-    modificateur: "Utilisateur" | None = Relationship(
+    modificateur: Optional["Utilisateur"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Client.id_modificateur]"}
     )
     abonnement: "Abonnement" = Relationship()

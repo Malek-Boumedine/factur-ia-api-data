@@ -17,7 +17,7 @@ class TypeProduits(str, Enum):
 
 
 class Catalogue(SQLModel, table=True):
-    __tablename__ = "catalogue"
+    __tablename__ = "catalogue_produits"
 
     id: int | None = Field(default=None, primary_key=True)
 
