@@ -7,6 +7,7 @@ from src.abonnements.router import router as abonnement_router
 from src.auth.router import router as auth_router
 from src.clients.router import router as clients_router
 from src.core.config import settings
+from src.utilisateurs.router import router as utilisateurs_router
 
 
 def get_app_version() -> str:
@@ -28,6 +29,7 @@ def get_application() -> FastAPI:
         title=settings.APP_NAME,
         debug=settings.DEBUG,
         version=get_app_version(),
+        swagger_ui_parameters={"docExpansion": "none"},
     )
 
     # Configuration du CORS
@@ -43,6 +45,7 @@ def get_application() -> FastAPI:
     _app.include_router(auth_router)
     _app.include_router(clients_router)
     _app.include_router(abonnement_router)
+    _app.include_router(utilisateurs_router)
 
     return _app
 

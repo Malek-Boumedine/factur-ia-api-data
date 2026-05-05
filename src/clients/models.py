@@ -6,7 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from src.abonnements.models import Abonnement
-    from src.utilisateurs.models import Utilisateur, Ville
+    from src.utilisateurs.models import Utilisateur
 
 
 class Client(SQLModel, table=True):
@@ -25,7 +25,8 @@ class Client(SQLModel, table=True):
 
     adresse: str | None = Field(default=None, max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
-    id_ville: int | None = Field(default=None, foreign_key="ville.id")
+    code_postal: str = Field(max_length=10, index=True)
+    ville: str = Field(max_length=150, index=True)
 
     email: str | None = Field(default=None, index=True, max_length=255)
 
@@ -41,8 +42,6 @@ class Client(SQLModel, table=True):
     date_desactivation: datetime | None = Field(default=None)
 
     # Relations
-    ville: Optional["Ville"] = Relationship(back_populates="clients")
-
     createur: Optional["Utilisateur"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Client.id_createur]"}
     )

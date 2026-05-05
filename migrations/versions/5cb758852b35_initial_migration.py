@@ -1,8 +1,8 @@
-"""Initial migration
+"""initial_migration
 
-Revision ID: fa2f9c52e921
+Revision ID: 5cb758852b35
 Revises:
-Create Date: 2026-04-14 20:24:46.539098
+Create Date: 2026-05-05 20:44:12.024378
 
 """
 
@@ -13,7 +13,7 @@ import sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "fa2f9c52e921"
+revision: str = "5cb758852b35"
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -101,89 +101,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("libelle"),
     )
     op.create_table(
-        "ville",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column(
-            "code_postal", sqlmodel.sql.sqltypes.AutoString(length=10), nullable=False
-        ),
-        sa.Column(
-            "commune", sqlmodel.sql.sqltypes.AutoString(length=150), nullable=False
-        ),
-        sa.Column(
-            "code_insee", sqlmodel.sql.sqltypes.AutoString(length=10), nullable=True
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        op.f("ix_ville_code_postal"), "ville", ["code_postal"], unique=False
-    )
-    op.create_table(
-        "declaration",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
-        sa.Column("periode_debut", sa.Date(), nullable=False),
-        sa.Column("periode_fin", sa.Date(), nullable=False),
-        sa.Column("montant_ht", sa.Numeric(precision=12, scale=2), nullable=False),
-        sa.Column("montant_tva", sa.Numeric(precision=12, scale=2), nullable=False),
-        sa.Column("montant_ttc", sa.Numeric(precision=12, scale=2), nullable=False),
-        sa.Column("id_statut_declaration", sa.Integer(), nullable=False),
-        sa.Column(
-            "reference_envoi",
-            sqlmodel.sql.sqltypes.AutoString(length=100),
-            nullable=True,
-        ),
-        sa.Column("date_envoi", sa.DateTime(), nullable=True),
-        sa.Column("date_creation", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["id_statut_declaration"],
-            ["statut_declaration.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_table(
-        "modele_relance",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
-        sa.Column(
-            "libelle", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False
-        ),
-        sa.Column("delai_jours", sa.Integer(), nullable=False),
-        sa.Column(
-            "type_relance",
-            sa.Enum("AUTOMATIQUE", "MANUELLE", name="typerelance"),
-            nullable=False,
-        ),
-        sa.Column("contenu_message", sa.Text(), nullable=True),
-        sa.Column(
-            "canal",
-            sa.Enum("DANS_APP", "COURRIEL", name="canalnotification"),
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_table(
-        "permission_role",
-        sa.Column("id_role", sa.Integer(), nullable=False),
-        sa.Column("id_permission", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["id_permission"],
-            ["permission.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["id_role"],
-            ["role.id"],
-        ),
-        sa.PrimaryKeyConstraint("id_role", "id_permission"),
-    )
-    op.create_table(
         "utilisateur",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("nom", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
@@ -198,7 +115,12 @@ def upgrade() -> None:
             sqlmodel.sql.sqltypes.AutoString(length=255),
             nullable=True,
         ),
-        sa.Column("code_postal_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "code_postal", sqlmodel.sql.sqltypes.AutoString(length=10), nullable=False
+        ),
+        sa.Column(
+            "ville", sqlmodel.sql.sqltypes.AutoString(length=150), nullable=False
+        ),
         sa.Column(
             "email", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False
         ),
@@ -214,13 +136,15 @@ def upgrade() -> None:
         sa.Column("date_modification", sa.DateTime(), nullable=False),
         sa.Column("date_derniere_connexion", sa.DateTime(), nullable=True),
         sa.Column("est_actif", sa.Boolean(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["code_postal_id"],
-            ["ville.id"],
-        ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        op.f("ix_utilisateur_code_postal"), "utilisateur", ["code_postal"], unique=False
+    )
     op.create_index(op.f("ix_utilisateur_email"), "utilisateur", ["email"], unique=True)
+    op.create_index(
+        op.f("ix_utilisateur_ville"), "utilisateur", ["ville"], unique=False
+    )
     op.create_table(
         "catalogue_produits",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -281,7 +205,12 @@ def upgrade() -> None:
             sqlmodel.sql.sqltypes.AutoString(length=255),
             nullable=True,
         ),
-        sa.Column("id_ville", sa.Integer(), nullable=True),
+        sa.Column(
+            "code_postal", sqlmodel.sql.sqltypes.AutoString(length=10), nullable=False
+        ),
+        sa.Column(
+            "ville", sqlmodel.sql.sqltypes.AutoString(length=150), nullable=False
+        ),
         sa.Column("email", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=True),
         sa.Column(
             "telephone", sqlmodel.sql.sqltypes.AutoString(length=20), nullable=True
@@ -302,18 +231,45 @@ def upgrade() -> None:
             ["id_modificateur"],
             ["utilisateur.id"],
         ),
-        sa.ForeignKeyConstraint(
-            ["id_ville"],
-            ["ville.id"],
-        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("numero_tva"),
+    )
+    op.create_index(
+        op.f("ix_client_code_postal"), "client", ["code_postal"], unique=False
     )
     op.create_index(op.f("ix_client_email"), "client", ["email"], unique=False)
     op.create_index(
         op.f("ix_client_raison_sociale"), "client", ["raison_sociale"], unique=False
     )
     op.create_index(op.f("ix_client_siret"), "client", ["siret"], unique=True)
+    op.create_index(op.f("ix_client_ville"), "client", ["ville"], unique=False)
+    op.create_table(
+        "declaration",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("periode_debut", sa.Date(), nullable=False),
+        sa.Column("periode_fin", sa.Date(), nullable=False),
+        sa.Column("montant_ht", sa.Numeric(precision=12, scale=2), nullable=False),
+        sa.Column("montant_tva", sa.Numeric(precision=12, scale=2), nullable=False),
+        sa.Column("montant_ttc", sa.Numeric(precision=12, scale=2), nullable=False),
+        sa.Column("id_statut_declaration", sa.Integer(), nullable=False),
+        sa.Column(
+            "reference_envoi",
+            sqlmodel.sql.sqltypes.AutoString(length=100),
+            nullable=True,
+        ),
+        sa.Column("date_envoi", sa.DateTime(), nullable=True),
+        sa.Column("date_creation", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["id_abonnement"],
+            ["abonnement.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_statut_declaration"],
+            ["statut_declaration.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
     op.create_table(
         "document",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -364,6 +320,31 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
+        "modele_relance",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column(
+            "libelle", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False
+        ),
+        sa.Column("delai_jours", sa.Integer(), nullable=False),
+        sa.Column(
+            "type_relance",
+            sa.Enum("AUTOMATIQUE", "MANUELLE", name="typerelance"),
+            nullable=False,
+        ),
+        sa.Column("contenu_message", sa.Text(), nullable=True),
+        sa.Column(
+            "canal",
+            sa.Enum("DANS_APP", "COURRIEL", name="canalnotification"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_abonnement"],
+            ["abonnement.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
         "notification",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("id_utilisateur", sa.Integer(), nullable=False),
@@ -390,6 +371,20 @@ def upgrade() -> None:
             ["utilisateur.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
+        "permission_role",
+        sa.Column("id_role", sa.Integer(), nullable=False),
+        sa.Column("id_permission", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["id_permission"],
+            ["permission.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_role"],
+            ["role.id"],
+        ),
+        sa.PrimaryKeyConstraint("id_role", "id_permission"),
     )
     op.create_table(
         "utilisateur_abonnement",
@@ -683,21 +678,23 @@ def downgrade() -> None:
     op.drop_table("facture")
     op.drop_table("utilisateur_role")
     op.drop_table("utilisateur_abonnement")
+    op.drop_table("permission_role")
     op.drop_table("notification")
+    op.drop_table("modele_relance")
     op.drop_table("journal_audit")
     op.drop_table("document")
+    op.drop_table("declaration")
+    op.drop_index(op.f("ix_client_ville"), table_name="client")
     op.drop_index(op.f("ix_client_siret"), table_name="client")
     op.drop_index(op.f("ix_client_raison_sociale"), table_name="client")
     op.drop_index(op.f("ix_client_email"), table_name="client")
+    op.drop_index(op.f("ix_client_code_postal"), table_name="client")
     op.drop_table("client")
     op.drop_table("catalogue_produits")
+    op.drop_index(op.f("ix_utilisateur_ville"), table_name="utilisateur")
     op.drop_index(op.f("ix_utilisateur_email"), table_name="utilisateur")
+    op.drop_index(op.f("ix_utilisateur_code_postal"), table_name="utilisateur")
     op.drop_table("utilisateur")
-    op.drop_table("permission_role")
-    op.drop_table("modele_relance")
-    op.drop_table("declaration")
-    op.drop_index(op.f("ix_ville_code_postal"), table_name="ville")
-    op.drop_table("ville")
     op.drop_table("type_notification")
     op.drop_table("taux_tva")
     op.drop_table("statut_facture")
