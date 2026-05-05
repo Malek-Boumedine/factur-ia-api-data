@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
 import bcrypt
 from jose import jwt
@@ -12,7 +12,7 @@ def get_password_hash(password: str) -> str:
     pwd_bytes = password.encode("utf-8")
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(pwd_bytes, salt)
-    return cast(str, hashed.decode("utf-8"))
+    return str(hashed.decode("utf-8"))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -20,7 +20,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         password_bytes = plain_password.encode("utf-8")
         hashed_bytes = hashed_password.encode("utf-8")
-        return cast(bool, bcrypt.checkpw(password_bytes, hashed_bytes))
+        return bool(bcrypt.checkpw(password_bytes, hashed_bytes))
     except Exception:
         return False
 
@@ -41,7 +41,7 @@ def create_access_token(
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
-    return cast(str, encoded_jwt)
+    return str(encoded_jwt)
 
 
 if __name__ == "__main__":
