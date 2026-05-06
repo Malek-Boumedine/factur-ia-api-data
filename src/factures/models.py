@@ -3,13 +3,14 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import JSON, TEXT, Column, DateTime
+from sqlalchemy import JSON, TEXT, Column, DateTime, Numeric
 from sqlmodel import Field, Relationship, SQLModel
+
+from src.documents.models import Document
 
 if TYPE_CHECKING:
     from src.abonnements.models import Abonnement
     from src.clients.models import Client
-    from src.documents.models import Document
     from src.utilisateurs.models import Utilisateur
 
 
@@ -22,8 +23,11 @@ class TauxTva(SQLModel, table=True):
     __tablename__ = "taux_tva"
 
     id: int | None = Field(default=None, primary_key=True)
-    taux: Decimal = Field(max_digits=5, decimal_places=2)
+    taux: Decimal = Field(
+        sa_column=Column(Numeric(precision=5, scale=2), unique=True, nullable=False)
+    )
     libelle: str = Field(max_length=100)
+    code_comptable: str | None = Field(default=None, max_length=50)
     est_actif: bool = Field(default=True)
 
 

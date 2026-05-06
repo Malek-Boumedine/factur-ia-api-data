@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.abonnements.router import router as abonnement_router
 from src.auth.router import router as auth_router
+from src.catalogue_produits.router import router as catalogue_produits_router
 from src.clients.router import router as clients_router
 from src.core.config import settings
 from src.utilisateurs.router import router as utilisateurs_router
@@ -46,6 +47,7 @@ def get_application() -> FastAPI:
     _app.include_router(clients_router)
     _app.include_router(abonnement_router)
     _app.include_router(utilisateurs_router)
+    _app.include_router(catalogue_produits_router)
 
     return _app
 
