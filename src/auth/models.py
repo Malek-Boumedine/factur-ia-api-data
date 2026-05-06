@@ -17,12 +17,22 @@ class PermissionRole(SQLModel, table=True):
 
 
 class UtilisateurRole(SQLModel, table=True):
-    """Table pivot : Associe un utilisateur à un ou plusieurs rôles globaux."""
+    """
+    Table pivot : Associe un utilisateur à un rôle.
+    - Si id_entreprise est NULL : C'est un rôle global
+    - Si id_entreprise est rempli : C'est un rôle local
+    """
 
     __tablename__ = "utilisateur_role"
 
-    id_utilisateur: int = Field(foreign_key="utilisateur.id", primary_key=True)
-    id_role: int = Field(foreign_key="role.id", primary_key=True)
+    # clé primaire simple : un utilisateur peut être
+    # admin dans l'entreprise A et l'entreprise B
+    id: int | None = Field(default=None, primary_key=True)
+    id_utilisateur: int = Field(foreign_key="utilisateur.id", index=True)
+    id_role: int = Field(foreign_key="role.id", index=True)
+    id_entreprise: int | None = Field(
+        default=None, foreign_key="entreprise.id", index=True
+    )
 
 
 class Permission(SQLModel, table=True):

@@ -211,6 +211,7 @@ def upgrade() -> None:
     )
     op.create_table(
         "utilisateur_role",
+        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("id_utilisateur", sa.Integer(), nullable=False),
         sa.Column("id_role", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(
@@ -221,7 +222,7 @@ def upgrade() -> None:
             ["id_utilisateur"],
             ["utilisateur.id"],
         ),
-        sa.PrimaryKeyConstraint("id_utilisateur", "id_role"),
+        sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
         "catalogue_produits",
