@@ -9,7 +9,6 @@ from src.auth.models import UtilisateurRole
 if TYPE_CHECKING:
     from src.abonnements.models import Abonnement
     from src.auth.models import Role
-    from src.clients.models import Client
 
 
 class Utilisateur(SQLModel, table=True):
@@ -20,8 +19,8 @@ class Utilisateur(SQLModel, table=True):
     prenom: str = Field(max_length=255)
     adresse: str = Field(max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
-    # clé étrangère vers la table Ville
-    code_postal_id: int = Field(foreign_key="ville.id")
+    code_postal: str = Field(max_length=10, index=True)
+    ville: str = Field(max_length=150, index=True)
 
     email: str = Field(unique=True, index=True, max_length=255)
     telephone: str | None = Field(default=None, max_length=20)
@@ -37,7 +36,6 @@ class Utilisateur(SQLModel, table=True):
     est_actif: bool = Field(default=True)
 
     ## Relations
-    ville: "Ville" = Relationship(back_populates="utilisateurs")
     roles: list["Role"] = Relationship(
         back_populates="utilisateurs", link_model=UtilisateurRole
     )
@@ -45,16 +43,3 @@ class Utilisateur(SQLModel, table=True):
     abonnements: list["Abonnement"] = Relationship(
         back_populates="utilisateurs", link_model=UtilisateurAbonnement
     )
-
-
-class Ville(SQLModel, table=True):
-    __tablename__ = "ville"
-
-    id: int | None = Field(default=None, primary_key=True)
-    code_postal: str = Field(max_length=10, index=True)
-    commune: str = Field(max_length=150)
-    code_insee: str | None = Field(default=None, max_length=10)
-
-    # relation inverse pour voir les habitants d'une ville
-    utilisateurs: list["Utilisateur"] = Relationship(back_populates="ville")
-    clients: list["Client"] = Relationship(back_populates="ville")

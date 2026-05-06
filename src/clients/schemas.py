@@ -19,9 +19,8 @@ class ClientBase(BaseModel):
     )
     adresse: str | None = Field(default=None, max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
-    id_ville: int | None = Field(
-        default=None, description="Clé étrangère vers la table Ville"
-    )
+    code_postal: str = Field(..., max_length=10)
+    ville: str = Field(..., max_length=150)
     email: EmailStr | None = Field(default=None, max_length=255)
     telephone: str | None = Field(default=None, max_length=20)
     est_actif: bool = Field(default=True)
@@ -30,8 +29,6 @@ class ClientBase(BaseModel):
 class ClientCreate(ClientBase):
     """
     Schéma pour la création d'un nouveau client.
-    Les champs id_abonnement et id_createur sont exclus ici car ils sont
-    injectés de manière sécurisée par le backend (dépendances).
     """
 
     pass
@@ -40,7 +37,6 @@ class ClientCreate(ClientBase):
 class ClientUpdate(BaseModel):
     """
     Schéma pour la mise à jour partielle d'un client (PATCH).
-    Tous les champs sont optionnels pour permettre de modifier une seule valeur.
     """
 
     raison_sociale: str | None = Field(default=None, max_length=255)
@@ -48,7 +44,8 @@ class ClientUpdate(BaseModel):
     numero_tva: str | None = Field(default=None, max_length=20)
     adresse: str | None = Field(default=None, max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
-    id_ville: int | None = Field(default=None)
+    code_postal: str | None = Field(default=None, max_length=10)
+    ville: str | None = Field(default=None, max_length=150)
     email: EmailStr | None = Field(default=None, max_length=255)
     telephone: str | None = Field(default=None, max_length=20)
     est_actif: bool | None = Field(default=None)
@@ -57,7 +54,6 @@ class ClientUpdate(BaseModel):
 class ClientRead(ClientBase):
     """
     Schéma pour renvoyer les données du client au front-end.
-    Inclut les champs générés par la base de données (IDs, dates).
     """
 
     id: int
@@ -69,6 +65,4 @@ class ClientRead(ClientBase):
     date_modification: datetime
     date_desactivation: datetime | None = None
 
-    # ConfigDict(from_attributes=True) permet à Pydantic de lire les données
-    # directement depuis l'objet SQLModel (Base de données) vers le JSON
     model_config = ConfigDict(from_attributes=True)
