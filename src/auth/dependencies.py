@@ -6,10 +6,10 @@ from jose import JWTError, jwt
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from src.abonnements.models import UtilisateurAbonnement
 from src.auth.models import Permission, PermissionRole, Role, UtilisateurRole
 from src.core.config import settings
 from src.core.database import get_session
+from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
 
 # On définit l'URL de l'endpoint qui gérera le login
@@ -63,20 +63,9 @@ class RequirePermission:
     Cette classe est conçue pour être injectée dans les routes FastAPI via `Depends()`.
     Elle vérifie de manière asynchrone en base de données si l'utilisateur
     authentifié possède la permission spécifique requise pour exécuter l'action.
-
-    Attributes:
-        required_permission (str): Le code
-            de la permission requise (ex: "facture:create").
     """
 
     def __init__(self, required_permission: str) -> None:
-        """
-        Initialise l'instance de vérification de permission.
-
-        Args:
-            required_permission (str): Le libellé exact de la permission nécessaire
-                telle qu'elle est stockée dans la table `permission`.
-        """
         self.required_permission = required_permission
 
     async def __call__(
@@ -86,23 +75,6 @@ class RequirePermission:
     ) -> Utilisateur:
         """
         Exécute la vérification des droits d'accès lors de l'appel de l'endpoint.
-
-        Réalise une jointure SQL traversant les tables de liaison pour vérifier
-        si au moins un des rôles attribués à l'utilisateur contient la permission cible.
-
-        Args:
-            current_user (Utilisateur): L'utilisateur authentifié fourni par
-                la dépendance précédente `get_current_user`.
-            session (AsyncSession): La session de base de données active.
-
-        Returns:
-            Utilisateur: L'instance de l'utilisateur
-                si l'autorisation est accordée,
-                permettant son utilisation dans la logique de la route.
-
-        Raises:
-            HTTPException: Renvoie une erreur HTTP 403 (Forbidden) si aucune
-                correspondance de permission n'est trouvée pour cet utilisateur.
         """
         statement = (
             select(Permission)
@@ -126,13 +98,13 @@ class RequirePermission:
         return current_user
 
 
-# isolation de l'abonnement (tenant)
+# isolation de l'entreprise (tenant)
 async def verify_tenant_access(
-    x_abonnement_id: Annotated[
+    x_entreprise_id: Annotated[
         int,
         Header(
-            title="ID de l'abonnement",
-            description="Identifiant de l'abonnement (tenant) \
+            title="ID de l'entreprise",
+            description="Identifiant de l'entreprise (tenant) \
                 actif transmis dans les en-têtes.",
         ),
     ],
@@ -142,39 +114,23 @@ async def verify_tenant_access(
     """
     Dépendance d'isolation des données (Tenant Isolation / Multitenancy).
 
-    Intercepte le header HTTP `X-Abonnement-ID` envoyé par le client et vérifie
+    Intercepte le header HTTP `X-Entreprise-ID` envoyé par le client et vérifie
     en base de données si l'utilisateur authentifié est légitimement rattaché
-    à cet espace de travail avec un statut actif.
-
-    Args:
-        x_abonnement_id (int): L'ID de l'abonnement
-            sur lequel l'utilisateur souhaite agir.
-        current_user (Utilisateur): L'utilisateur identifié par son token JWT.
-        session (AsyncSession): La session de base de données.
-
-    Returns:
-        int: L'identifiant de l'abonnement sécurisé et validé. Cet ID devra être
-            utilisé dans toutes les requêtes SQL métier pour filtrer les données.
-
-    Raises:
-        HTTPException: Renvoie une erreur HTTP 403 (Forbidden) si l'utilisateur
-            n'a pas de lien avec cet abonnement ou si le lien est suspendu/expiré.
+    à cet espace de travail.
     """
     statement = (
-        select(UtilisateurAbonnement)
-        .where(UtilisateurAbonnement.id_utilisateur == current_user.id)
-        .where(UtilisateurAbonnement.id_abonnement == x_abonnement_id)
-        .where(UtilisateurAbonnement.statut == "ACTIF")
+        select(UtilisateurEntreprise)
+        .where(UtilisateurEntreprise.id_utilisateur == current_user.id)
+        .where(UtilisateurEntreprise.id_entreprise == x_entreprise_id)
     )
 
     result = await session.exec(statement)
-    lien_abonnement = result.first()
+    lien_entreprise = result.first()
 
-    if not lien_abonnement:
+    if not lien_entreprise:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé. Vous n'appartenez \
-                pas à cet abonnement ou celui-ci est inactif.",
+            detail="Accès refusé. Vous n'appartenez pas à cette entreprise.",
         )
 
-    return x_abonnement_id
+    return x_entreprise_id

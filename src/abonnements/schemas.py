@@ -43,16 +43,15 @@ class AbonnementRead(AbonnementBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# schémas pour la liaison Utilisateur/Abonnement
-class UtilisateurAbonnementRead(BaseModel):
+# schémas pour la liaison Entreprise/Abonnement
+class EntrepriseAbonnementRead(BaseModel):
     """
-    Détails de la souscription d'un utilisateur à un abonnement.
+    Détails de la souscription d'une entreprise à un abonnement.
     """
 
     id: int
+    id_entreprise: int
     id_abonnement: int
-    id_utilisateur: int
-    est_admin_abonnement: bool
     date_debut: date
     date_fin: date | None
     statut: StatutSouscription

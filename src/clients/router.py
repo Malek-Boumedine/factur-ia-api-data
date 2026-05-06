@@ -15,27 +15,27 @@ from src.core.database import get_session
 from src.utilisateurs.models import Utilisateur
 
 router = APIRouter(prefix="/clients", tags=["Ecosystème Client"])
+entreprise_id_dep = Annotated[int, Depends(verify_tenant_access)]
+current_user_dep = Annotated[Utilisateur, Depends(get_current_user)]
+session_dep = Annotated[AsyncSession, Depends(get_session)]
 
 
 @router.post("/", response_model=ClientRead, status_code=status.HTTP_201_CREATED)
 async def create_client(
     client_in: ClientCreate,
-    current_user: Annotated[Utilisateur, Depends(get_current_user)],
-    abonnement_id: Annotated[int, Depends(verify_tenant_access)],
+    current_user: current_user_dep,
+    entreprise_id: entreprise_id_dep,
     _: Annotated[Utilisateur, Depends(RequirePermission("client:create"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: session_dep,
 ) -> Any:
-    # _ est une convention python qui signifie :
-    # "J'ai besoin d'exécuter ceci,
-    # mais je n'utiliserai pas la valeur retournée dans mon code."
     """
-    Crée un nouveau client rattaché à l'abonnement actif.
-    L'ID du créateur et l'ID de l'abonnement sont renseignés automatiquement.
+    Crée un nouveau client rattaché à l'entreprise (espace de travail) active.
+    L'ID du créateur et l'ID de l'entreprise sont renseignés automatiquement.
     """
-    # Validation et injection sécurisée des IDs cachés
+    # Validation et injection sécurisée des IDs liés au contexte (Tenant + Createur)
     db_client = Client.model_validate(
         client_in,
-        update={"id_abonnement": abonnement_id, "id_createur": current_user.id},
+        update={"id_entreprise": entreprise_id, "id_createur": current_user.id},
     )
 
     session.add(db_client)
@@ -47,14 +47,14 @@ async def create_client(
 
 @router.get("/", response_model=list[ClientRead])
 async def list_clients(
-    abonnement_id: Annotated[int, Depends(verify_tenant_access)],
+    entreprise_id: entreprise_id_dep,
     _: Annotated[Utilisateur, Depends(RequirePermission("client:read"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: session_dep,
 ) -> Any:
     """
-    Récupère la liste de tous les clients appartenant à l'abonnement actif.
+    Récupère la liste de tous les clients appartenant à l'entreprise active.
     """
-    statement = select(Client).where(Client.id_abonnement == abonnement_id)
+    statement = select(Client).where(Client.id_entreprise == entreprise_id)
     result = await session.exec(statement)
 
     return result.all()
@@ -63,16 +63,16 @@ async def list_clients(
 @router.get("/{client_id}", response_model=ClientRead)
 async def get_client(
     client_id: int,
-    abonnement_id: Annotated[int, Depends(verify_tenant_access)],
+    entreprise_id: entreprise_id_dep,
     _: Annotated[Utilisateur, Depends(RequirePermission("client:read"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: session_dep,
 ) -> Any:
     """
     Récupère les détails d'un client spécifique en s'assurant qu'il
-    appartient bien à l'abonnement actif.
+    appartient bien à l'entreprise active (isolation des données).
     """
     statement = select(Client).where(
-        Client.id == client_id, Client.id_abonnement == abonnement_id
+        Client.id == client_id, Client.id_entreprise == entreprise_id
     )
     result = await session.exec(statement)
     db_client = result.first()
@@ -80,7 +80,7 @@ async def get_client(
     if not db_client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client introuvable dans cet abonnement",
+            detail="Client introuvable dans cet espace entreprise",
         )
 
     return db_client
@@ -90,17 +90,17 @@ async def get_client(
 async def update_client(
     client_id: int,
     client_in: ClientUpdate,
-    current_user: Annotated[Utilisateur, Depends(get_current_user)],
-    abonnement_id: Annotated[int, Depends(verify_tenant_access)],
+    current_user: current_user_dep,
+    entreprise_id: entreprise_id_dep,
     _: Annotated[Utilisateur, Depends(RequirePermission("client:update"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: session_dep,
 ) -> Any:
     """
     Met à jour partiellement les informations d'un client.
-    Met à jour automatiquement l'ID du modificateur.
+    Met à jour automatiquement l'ID du modificateur pour l'audit.
     """
     statement = select(Client).where(
-        Client.id == client_id, Client.id_abonnement == abonnement_id
+        Client.id == client_id, Client.id_entreprise == entreprise_id
     )
     result = await session.exec(statement)
     db_client = result.first()
@@ -108,15 +108,15 @@ async def update_client(
     if not db_client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client introuvable dans cet abonnement",
+            detail="Client introuvable dans cet espace entreprise",
         )
 
-    # Extraction des données envoyées (ignore les champs non renseignés)
+    # Extraction des données envoyées
     client_data = client_in.model_dump(exclude_unset=True)
     for key, value in client_data.items():
         setattr(db_client, key, value)
 
-    # Traçabilité
+    # Mise à jour de la traçabilité
     db_client.id_modificateur = current_user.id
 
     session.add(db_client)
@@ -129,15 +129,15 @@ async def update_client(
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client(
     client_id: int,
-    abonnement_id: Annotated[int, Depends(verify_tenant_access)],
+    entreprise_id: entreprise_id_dep,
     _: Annotated[Utilisateur, Depends(RequirePermission("client:delete"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: session_dep,
 ) -> None:
     """
-    Supprime un client appartenant à l'abonnement actif.
+    Supprime définitivement un client appartenant à l'entreprise active.
     """
     statement = select(Client).where(
-        Client.id == client_id, Client.id_abonnement == abonnement_id
+        Client.id == client_id, Client.id_entreprise == entreprise_id
     )
     result = await session.exec(statement)
     db_client = result.first()
@@ -145,7 +145,7 @@ async def delete_client(
     if not db_client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Client introuvable dans cet abonnement",
+            detail="Client introuvable dans cet espace entreprise",
         )
 
     await session.delete(db_client)

@@ -9,29 +9,35 @@ from sqlmodel import Field, Relationship, SQLModel
 from src.documents.models import Document
 
 if TYPE_CHECKING:
-    from src.abonnements.models import Abonnement
     from src.clients.models import Client
+    from src.entreprises.models import Entreprise
     from src.utilisateurs.models import Utilisateur
 
 
 class TypeFacture(str, Enum):
+    """Distingue une facture classique d'un avoir (facture d'annulation/correction)."""
+
     FACTURE = "facture"
     AVOIR = "avoir"
 
 
 class TauxTva(SQLModel, table=True):
+    """Référentiel des taux de TVA applicables."""
+
     __tablename__ = "taux_tva"
 
     id: int | None = Field(default=None, primary_key=True)
     taux: Decimal = Field(
         sa_column=Column(Numeric(precision=5, scale=2), unique=True, nullable=False)
     )
-    libelle: str = Field(max_length=100)
+    libelle: str = Field(max_length=100)  # ex: "TVA Normale 20%"
     code_comptable: str | None = Field(default=None, max_length=50)
     est_actif: bool = Field(default=True)
 
 
 class StatutFacture(SQLModel, table=True):
+    """Référentiel des statuts de cycle de vie (Brouillon, Envoyée, Payée, etc.)."""
+
     __tablename__ = "statut_facture"
 
     id: int | None = Field(default=None, primary_key=True)
@@ -40,10 +46,18 @@ class StatutFacture(SQLModel, table=True):
 
 
 class Facture(SQLModel, table=True):
+    """
+    Entité comptable principale.
+    Contient les données de l'émetteur \
+        et du destinataire au moment de l'émission (snapshots).
+    """
+
     __tablename__ = "facture"
 
     id: int | None = Field(default=None, primary_key=True)
-    id_abonnement: int = Field(foreign_key="abonnement.id")
+
+    # isolation par entreprise (Tenant)
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
     id_createur: int = Field(foreign_key="utilisateur.id")
     id_client: int | None = Field(default=None, foreign_key="client.id")
     id_document: int | None = Field(default=None, foreign_key="document.id")
@@ -55,12 +69,12 @@ class Facture(SQLModel, table=True):
     type_facture: TypeFacture = Field(default=TypeFacture.FACTURE)
     id_statut: int = Field(foreign_key="statut_facture.id")
 
-    # snapshots
+    # snapshots (Sécurité comptable : les données ne changent pas)
     siret_emetteur: str | None = Field(default=None, max_length=14)
     siret_destinataire: str | None = Field(default=None, max_length=14)
     snapshot_client: dict[str, Any] | None = Field(default=None, sa_column=Column(JSON))
 
-    # totaux
+    # Totaux calculés
     total_ht: Decimal = Field(max_digits=12, decimal_places=2)
     total_tva: Decimal = Field(max_digits=12, decimal_places=2)
     total_ttc: Decimal = Field(max_digits=12, decimal_places=2)
@@ -78,16 +92,18 @@ class Facture(SQLModel, table=True):
     )
     notes: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
 
-    ## relations
+    # relations
     lignes: list["FactureLigne"] = Relationship(back_populates="facture")
     statut_ref: "StatutFacture" = Relationship()
     createur: "Utilisateur" = Relationship()
-    abonnement: "Abonnement" = Relationship()
+    entreprise: "Entreprise" = Relationship()
     client: Optional["Client"] = Relationship()
     document: Optional["Document"] = Relationship()
 
 
 class FactureLigne(SQLModel, table=True):
+    """Détail des articles ou services présents dans une facture."""
+
     __tablename__ = "facture_ligne"
 
     id: int | None = Field(default=None, primary_key=True)
@@ -109,11 +125,13 @@ class FactureLigne(SQLModel, table=True):
 
 
 class Avoir(SQLModel, table=True):
+    """Représente l'annulation totale ou partielle d'une facture émise."""
+
     __tablename__ = "avoir"
 
     id: int | None = Field(default=None, primary_key=True)
     id_facture_origine: int = Field(foreign_key="facture.id")
-    id_abonnement: int = Field(foreign_key="abonnement.id")
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
     id_createur: int = Field(foreign_key="utilisateur.id")
 
     numero_avoir: str = Field(unique=True, max_length=50)
@@ -126,12 +144,15 @@ class Avoir(SQLModel, table=True):
 
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    # relations
     facture_origine: "Facture" = Relationship()
-    abonnement: "Abonnement" = Relationship()
+    entreprise: "Entreprise" = Relationship()
     createur: "Utilisateur" = Relationship()
 
 
 class Paiement(SQLModel, table=True):
+    """Tracé des règlements reçus pour une facture spécifique."""
+
     __tablename__ = "paiement"
 
     id: int | None = Field(default=None, primary_key=True)
@@ -140,12 +161,11 @@ class Paiement(SQLModel, table=True):
 
     montant: Decimal = Field(max_digits=12, decimal_places=2)
     date_paiement: date = Field(default_factory=date.today)
-    mode_paiement: str = Field(max_length=50)
-    reference: str | None = Field(
-        default=None, max_length=100
-    )  # n° chèque, virement ...
+    mode_paiement: str = Field(max_length=50)  # Virement, Chèque, etc.
+    reference: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    # relations
     facture: "Facture" = Relationship()
     createur: "Utilisateur" = Relationship()
