@@ -19,7 +19,10 @@ async def login_for_access_token(
 ) -> dict[str, str]:
     """
     Authentifie un utilisateur et retourne un token JWT.
-    OAuth2PasswordRequestForm attend 'username' (ici l'email) et 'password'.
+
+    L'authentification s'effectue au niveau global de l'utilisateur (email).
+    Une fois authentifié, l'utilisateur devra fournir un header 'x-entreprise-id'
+    sur les routes métiers pour interagir avec les données de ses entreprises.
     """
     # recherche de l'utilisateur par email
     statement = select(Utilisateur).where(Utilisateur.email == form_data.username)

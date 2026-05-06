@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, DateTime, Numeric
 from sqlmodel import Field, Relationship, SQLModel
@@ -9,7 +9,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from src.factures.models import TauxTva
 
 if TYPE_CHECKING:
-    from src.abonnements.models import Abonnement
+    from src.entreprises.models import Entreprise
     from src.utilisateurs.models import Utilisateur
 
 
@@ -33,7 +33,7 @@ class Catalogue(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
 
     # Clés étrangères
-    id_abonnement: int = Field(foreign_key="abonnement.id", index=True)
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
     id_utilisateur: int = Field(foreign_key="utilisateur.id")
     id_taux_tva: int = Field(foreign_key="taux_tva.id")
 
@@ -56,6 +56,6 @@ class Catalogue(SQLModel, table=True):
     )
 
     # --- RELATIONS ---
-    abonnement: "Abonnement" = Relationship()
+    entreprise: Optional["Entreprise"] = Relationship()
     createur: "Utilisateur" = Relationship()
     taux_tva: "TauxTva" = Relationship()

@@ -57,7 +57,7 @@ class ClientRead(ClientBase):
     """
 
     id: int
-    id_abonnement: int
+    id_entreprise: int
     id_createur: int
     id_modificateur: int | None = None
 

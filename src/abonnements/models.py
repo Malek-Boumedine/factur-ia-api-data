@@ -3,14 +3,13 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import TEXT, Column, UniqueConstraint
+from sqlalchemy import TEXT, Column
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from src.utilisateurs.models import Utilisateur
+    from src.entreprises.models import Entreprise
 
 
-# enum pour le statut
 class StatutSouscription(str, Enum):
     ACTIF = "actif"
     EXPIRE = "expiré"
@@ -18,26 +17,19 @@ class StatutSouscription(str, Enum):
     ANNULE = "annulé"
 
 
-class UtilisateurAbonnement(SQLModel, table=True):
-    __tablename__ = "utilisateur_abonnement"
+class EntrepriseAbonnement(SQLModel, table=True):
+    """Table de souscription : l'entreprise possède l'abonnement"""
 
-    __table_args__ = (
-        UniqueConstraint(
-            "id_abonnement", "id_utilisateur", name="unique_abonnement_utilisateur"
-        ),
-    )
+    __tablename__ = "entreprise_abonnement"
 
     id: int | None = Field(default=None, primary_key=True)
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
     id_abonnement: int = Field(foreign_key="abonnement.id")
-    id_utilisateur: int = Field(foreign_key="utilisateur.id")
 
-    est_admin_abonnement: bool = Field(default=False)
     date_debut: date = Field(default_factory=date.today)
     date_fin: date | None = Field(default=None)
-
-    date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
     statut: StatutSouscription = Field(default=StatutSouscription.ACTIF)
+    date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Abonnement(SQLModel, table=True):
@@ -50,7 +42,7 @@ class Abonnement(SQLModel, table=True):
     nombre_max_utilisateurs: int = Field(default=1)
     nombre_max_factures_mois: int = Field(default=10)
 
-    # relation Many-to-Many vers Utilisateur (référence par chaîne)
-    utilisateurs: list["Utilisateur"] = Relationship(
-        back_populates="abonnements", link_model=UtilisateurAbonnement
+    # Relation Many-to-Many
+    entreprises: list["Entreprise"] = Relationship(
+        back_populates="abonnements", link_model=EntrepriseAbonnement
     )

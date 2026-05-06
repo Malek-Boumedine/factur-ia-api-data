@@ -8,6 +8,7 @@ import src.auth.models  # noqa: F401
 import src.catalogue_produits.models  # noqa: F401
 import src.clients.models  # noqa: F401
 import src.documents.models  # noqa: F401
+import src.entreprises.models  # noqa: F401
 import src.factures.models  # noqa: F401
 import src.notifications.models  # noqa: F401
 import src.pdp.models  # noqa: F401

@@ -1,8 +1,8 @@
-"""initial_migration
+"""initial_multitenant_schema
 
-Revision ID: 5cb758852b35
+Revision ID: 770114eb599f
 Revises:
-Create Date: 2026-05-05 20:44:12.024378
+Create Date: 2026-05-06 14:15:48.992690
 
 """
 
@@ -13,7 +13,7 @@ import sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "5cb758852b35"
+revision: str = "770114eb599f"  # pragma: allowlist secret
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -48,6 +48,27 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_permission_libelle"), "permission", ["libelle"], unique=True
+    )
+    op.create_table(
+        "ref_forme_juridique",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("code", sqlmodel.sql.sqltypes.AutoString(length=20), nullable=False),
+        sa.Column(
+            "libelle", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False
+        ),
+        sa.Column(
+            "mention_tva_defaut",
+            sqlmodel.sql.sqltypes.AutoString(length=255),
+            nullable=True,
+        ),
+        sa.Column("est_actif", sa.Boolean(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_ref_forme_juridique_code"),
+        "ref_forme_juridique",
+        ["code"],
+        unique=True,
     )
     op.create_table(
         "role",
@@ -86,8 +107,12 @@ def upgrade() -> None:
         sa.Column(
             "libelle", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False
         ),
+        sa.Column(
+            "code_comptable", sqlmodel.sql.sqltypes.AutoString(length=50), nullable=True
+        ),
         sa.Column("est_actif", sa.Boolean(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("taux"),
     )
     op.create_table(
         "type_notification",
@@ -146,14 +171,67 @@ def upgrade() -> None:
         op.f("ix_utilisateur_ville"), "utilisateur", ["ville"], unique=False
     )
     op.create_table(
+        "entreprise",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column(
+            "nom_entreprise",
+            sqlmodel.sql.sqltypes.AutoString(length=255),
+            nullable=False,
+        ),
+        sa.Column("siret", sqlmodel.sql.sqltypes.AutoString(length=14), nullable=True),
+        sa.Column("id_forme_juridique", sa.Integer(), nullable=True),
+        sa.Column("date_creation", sa.DateTime(), nullable=False),
+        sa.Column("date_modification", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["id_forme_juridique"],
+            ["ref_forme_juridique.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_entreprise_nom_entreprise"),
+        "entreprise",
+        ["nom_entreprise"],
+        unique=False,
+    )
+    op.create_index(op.f("ix_entreprise_siret"), "entreprise", ["siret"], unique=True)
+    op.create_table(
+        "permission_role",
+        sa.Column("id_role", sa.Integer(), nullable=False),
+        sa.Column("id_permission", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["id_permission"],
+            ["permission.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_role"],
+            ["role.id"],
+        ),
+        sa.PrimaryKeyConstraint("id_role", "id_permission"),
+    )
+    op.create_table(
+        "utilisateur_role",
+        sa.Column("id_utilisateur", sa.Integer(), nullable=False),
+        sa.Column("id_role", sa.Integer(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["id_role"],
+            ["role.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_utilisateur"],
+            ["utilisateur.id"],
+        ),
+        sa.PrimaryKeyConstraint("id_utilisateur", "id_role"),
+    )
+    op.create_table(
         "catalogue_produits",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
         sa.Column("id_utilisateur", sa.Integer(), nullable=False),
         sa.Column("id_taux_tva", sa.Integer(), nullable=False),
         sa.Column(
             "type_produit",
-            sa.Enum("ARTICLE", "PRESTATION", name="typeproduits"),
+            sa.Enum("PRODUIT", "PRESTATION", "SERVICE", name="typeproduit"),
             nullable=False,
         ),
         sa.Column(
@@ -168,9 +246,10 @@ def upgrade() -> None:
         sa.Column("unite", sqlmodel.sql.sqltypes.AutoString(length=50), nullable=True),
         sa.Column("est_actif", sa.Boolean(), nullable=False),
         sa.Column("date_creation", sa.DateTime(), nullable=False),
+        sa.Column("date_modification", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
+            ["id_entreprise"],
+            ["entreprise.id"],
         ),
         sa.ForeignKeyConstraint(
             ["id_taux_tva"],
@@ -182,10 +261,22 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        op.f("ix_catalogue_produits_id_entreprise"),
+        "catalogue_produits",
+        ["id_entreprise"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_catalogue_produits_reference"),
+        "catalogue_produits",
+        ["reference"],
+        unique=False,
+    )
     op.create_table(
         "client",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
         sa.Column("id_createur", sa.Integer(), nullable=False),
         sa.Column("id_modificateur", sa.Integer(), nullable=True),
         sa.Column(
@@ -220,12 +311,12 @@ def upgrade() -> None:
         sa.Column("date_modification", sa.DateTime(timezone=True), nullable=True),
         sa.Column("date_desactivation", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
-        ),
-        sa.ForeignKeyConstraint(
             ["id_createur"],
             ["utilisateur.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_entreprise"],
+            ["entreprise.id"],
         ),
         sa.ForeignKeyConstraint(
             ["id_modificateur"],
@@ -239,6 +330,9 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_client_email"), "client", ["email"], unique=False)
     op.create_index(
+        op.f("ix_client_id_entreprise"), "client", ["id_entreprise"], unique=False
+    )
+    op.create_index(
         op.f("ix_client_raison_sociale"), "client", ["raison_sociale"], unique=False
     )
     op.create_index(op.f("ix_client_siret"), "client", ["siret"], unique=True)
@@ -246,7 +340,7 @@ def upgrade() -> None:
     op.create_table(
         "declaration",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
         sa.Column("periode_debut", sa.Date(), nullable=False),
         sa.Column("periode_fin", sa.Date(), nullable=False),
         sa.Column("montant_ht", sa.Numeric(precision=12, scale=2), nullable=False),
@@ -261,8 +355,8 @@ def upgrade() -> None:
         sa.Column("date_envoi", sa.DateTime(), nullable=True),
         sa.Column("date_creation", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
+            ["id_entreprise"],
+            ["entreprise.id"],
         ),
         sa.ForeignKeyConstraint(
             ["id_statut_declaration"],
@@ -270,10 +364,16 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        op.f("ix_declaration_id_entreprise"),
+        "declaration",
+        ["id_entreprise"],
+        unique=False,
+    )
     op.create_table(
         "document",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
         sa.Column("id_utilisateur", sa.Integer(), nullable=False),
         sa.Column(
             "nom_fichier", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False
@@ -285,8 +385,8 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
+            ["id_entreprise"],
+            ["entreprise.id"],
         ),
         sa.ForeignKeyConstraint(
             ["id_utilisateur"],
@@ -294,9 +394,42 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        op.f("ix_document_id_entreprise"), "document", ["id_entreprise"], unique=False
+    )
+    op.create_table(
+        "entreprise_abonnement",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
+        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("date_debut", sa.Date(), nullable=False),
+        sa.Column("date_fin", sa.Date(), nullable=True),
+        sa.Column(
+            "statut",
+            sa.Enum("ACTIF", "EXPIRE", "SUSPENDU", "ANNULE", name="statutsouscription"),
+            nullable=False,
+        ),
+        sa.Column("date_creation", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["id_abonnement"],
+            ["abonnement.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_entreprise"],
+            ["entreprise.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_entreprise_abonnement_id_entreprise"),
+        "entreprise_abonnement",
+        ["id_entreprise"],
+        unique=False,
+    )
     op.create_table(
         "journal_audit",
         sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=True),
         sa.Column("id_utilisateur", sa.Integer(), nullable=True),
         sa.Column(
             "entite", sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False
@@ -314,15 +447,25 @@ def upgrade() -> None:
         ),
         sa.Column("date_action", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(
+            ["id_entreprise"],
+            ["entreprise.id"],
+        ),
+        sa.ForeignKeyConstraint(
             ["id_utilisateur"],
             ["utilisateur.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        op.f("ix_journal_audit_id_entreprise"),
+        "journal_audit",
+        ["id_entreprise"],
+        unique=False,
+    )
     op.create_table(
         "modele_relance",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
         sa.Column(
             "libelle", sqlmodel.sql.sqltypes.AutoString(length=100), nullable=False
         ),
@@ -339,15 +482,22 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
+            ["id_entreprise"],
+            ["entreprise.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_modele_relance_id_entreprise"),
+        "modele_relance",
+        ["id_entreprise"],
+        unique=False,
     )
     op.create_table(
         "notification",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("id_utilisateur", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=True),
         sa.Column("id_type", sa.Integer(), nullable=False),
         sa.Column("message", sa.Text(), nullable=False),
         sa.Column(
@@ -363,6 +513,10 @@ def upgrade() -> None:
         ),
         sa.Column("date_expiration", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
+            ["id_entreprise"],
+            ["entreprise.id"],
+        ),
+        sa.ForeignKeyConstraint(
             ["id_type"],
             ["type_notification.id"],
         ),
@@ -372,65 +526,40 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_table(
-        "permission_role",
-        sa.Column("id_role", sa.Integer(), nullable=False),
-        sa.Column("id_permission", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["id_permission"],
-            ["permission.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["id_role"],
-            ["role.id"],
-        ),
-        sa.PrimaryKeyConstraint("id_role", "id_permission"),
+    op.create_index(
+        op.f("ix_notification_id_entreprise"),
+        "notification",
+        ["id_entreprise"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_notification_id_utilisateur"),
+        "notification",
+        ["id_utilisateur"],
+        unique=False,
     )
     op.create_table(
-        "utilisateur_abonnement",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        "utilisateur_entreprise",
         sa.Column("id_utilisateur", sa.Integer(), nullable=False),
-        sa.Column("est_admin_abonnement", sa.Boolean(), nullable=False),
-        sa.Column("date_debut", sa.Date(), nullable=False),
-        sa.Column("date_fin", sa.Date(), nullable=True),
-        sa.Column("date_creation", sa.DateTime(), nullable=False),
-        sa.Column(
-            "statut",
-            sa.Enum("ACTIF", "EXPIRE", "SUSPENDU", "ANNULE", name="statutsouscription"),
-            nullable=False,
-        ),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
+        sa.Column("est_admin", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
+            ["id_entreprise"],
+            ["entreprise.id"],
         ),
         sa.ForeignKeyConstraint(
             ["id_utilisateur"],
             ["utilisateur.id"],
         ),
-        sa.PrimaryKeyConstraint("id"),
+        sa.PrimaryKeyConstraint("id_utilisateur", "id_entreprise"),
         sa.UniqueConstraint(
-            "id_abonnement", "id_utilisateur", name="unique_abonnement_utilisateur"
+            "id_utilisateur", "id_entreprise", name="unique_utilisateur_entreprise"
         ),
-    )
-    op.create_table(
-        "utilisateur_role",
-        sa.Column("id_utilisateur", sa.Integer(), nullable=False),
-        sa.Column("id_role", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["id_role"],
-            ["role.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["id_utilisateur"],
-            ["utilisateur.id"],
-        ),
-        sa.PrimaryKeyConstraint("id_utilisateur", "id_role"),
     )
     op.create_table(
         "facture",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
         sa.Column("id_createur", sa.Integer(), nullable=False),
         sa.Column("id_client", sa.Integer(), nullable=True),
         sa.Column("id_document", sa.Integer(), nullable=True),
@@ -473,10 +602,6 @@ def upgrade() -> None:
         sa.Column("date_modification", sa.DateTime(timezone=True), nullable=True),
         sa.Column("notes", sa.TEXT(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
-        ),
-        sa.ForeignKeyConstraint(
             ["id_client"],
             ["client.id"],
         ),
@@ -489,10 +614,17 @@ def upgrade() -> None:
             ["document.id"],
         ),
         sa.ForeignKeyConstraint(
+            ["id_entreprise"],
+            ["entreprise.id"],
+        ),
+        sa.ForeignKeyConstraint(
             ["id_statut"],
             ["statut_facture.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        op.f("ix_facture_id_entreprise"), "facture", ["id_entreprise"], unique=False
     )
     op.create_index(
         op.f("ix_facture_numero_facture"), "facture", ["numero_facture"], unique=True
@@ -501,7 +633,7 @@ def upgrade() -> None:
         "avoir",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("id_facture_origine", sa.Integer(), nullable=False),
-        sa.Column("id_abonnement", sa.Integer(), nullable=False),
+        sa.Column("id_entreprise", sa.Integer(), nullable=False),
         sa.Column("id_createur", sa.Integer(), nullable=False),
         sa.Column(
             "numero_avoir", sqlmodel.sql.sqltypes.AutoString(length=50), nullable=False
@@ -513,12 +645,12 @@ def upgrade() -> None:
         sa.Column("total_ttc", sa.Numeric(precision=12, scale=2), nullable=False),
         sa.Column("date_creation", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(
-            ["id_abonnement"],
-            ["abonnement.id"],
-        ),
-        sa.ForeignKeyConstraint(
             ["id_createur"],
             ["utilisateur.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["id_entreprise"],
+            ["entreprise.id"],
         ),
         sa.ForeignKeyConstraint(
             ["id_facture_origine"],
@@ -526,6 +658,9 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("numero_avoir"),
+    )
+    op.create_index(
+        op.f("ix_avoir_id_entreprise"), "avoir", ["id_entreprise"], unique=False
     )
     op.create_table(
         "evenement_pdp",
@@ -662,35 +797,62 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index(
+        op.f("ix_relance_id_facture"), "relance", ["id_facture"], unique=False
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f("ix_relance_id_facture"), table_name="relance")
     op.drop_table("relance")
     op.drop_table("paiement")
     op.drop_table("facture_ligne")
     op.drop_table("extraction_ocr")
     op.drop_table("evenement_pdp")
+    op.drop_index(op.f("ix_avoir_id_entreprise"), table_name="avoir")
     op.drop_table("avoir")
     op.drop_index(op.f("ix_facture_numero_facture"), table_name="facture")
+    op.drop_index(op.f("ix_facture_id_entreprise"), table_name="facture")
     op.drop_table("facture")
-    op.drop_table("utilisateur_role")
-    op.drop_table("utilisateur_abonnement")
-    op.drop_table("permission_role")
+    op.drop_table("utilisateur_entreprise")
+    op.drop_index(op.f("ix_notification_id_utilisateur"), table_name="notification")
+    op.drop_index(op.f("ix_notification_id_entreprise"), table_name="notification")
     op.drop_table("notification")
+    op.drop_index(op.f("ix_modele_relance_id_entreprise"), table_name="modele_relance")
     op.drop_table("modele_relance")
+    op.drop_index(op.f("ix_journal_audit_id_entreprise"), table_name="journal_audit")
     op.drop_table("journal_audit")
+    op.drop_index(
+        op.f("ix_entreprise_abonnement_id_entreprise"),
+        table_name="entreprise_abonnement",
+    )
+    op.drop_table("entreprise_abonnement")
+    op.drop_index(op.f("ix_document_id_entreprise"), table_name="document")
     op.drop_table("document")
+    op.drop_index(op.f("ix_declaration_id_entreprise"), table_name="declaration")
     op.drop_table("declaration")
     op.drop_index(op.f("ix_client_ville"), table_name="client")
     op.drop_index(op.f("ix_client_siret"), table_name="client")
     op.drop_index(op.f("ix_client_raison_sociale"), table_name="client")
+    op.drop_index(op.f("ix_client_id_entreprise"), table_name="client")
     op.drop_index(op.f("ix_client_email"), table_name="client")
     op.drop_index(op.f("ix_client_code_postal"), table_name="client")
     op.drop_table("client")
+    op.drop_index(
+        op.f("ix_catalogue_produits_reference"), table_name="catalogue_produits"
+    )
+    op.drop_index(
+        op.f("ix_catalogue_produits_id_entreprise"), table_name="catalogue_produits"
+    )
     op.drop_table("catalogue_produits")
+    op.drop_table("utilisateur_role")
+    op.drop_table("permission_role")
+    op.drop_index(op.f("ix_entreprise_siret"), table_name="entreprise")
+    op.drop_index(op.f("ix_entreprise_nom_entreprise"), table_name="entreprise")
+    op.drop_table("entreprise")
     op.drop_index(op.f("ix_utilisateur_ville"), table_name="utilisateur")
     op.drop_index(op.f("ix_utilisateur_email"), table_name="utilisateur")
     op.drop_index(op.f("ix_utilisateur_code_postal"), table_name="utilisateur")
@@ -701,6 +863,8 @@ def downgrade() -> None:
     op.drop_table("statut_declaration")
     op.drop_index(op.f("ix_role_libelle"), table_name="role")
     op.drop_table("role")
+    op.drop_index(op.f("ix_ref_forme_juridique_code"), table_name="ref_forme_juridique")
+    op.drop_table("ref_forme_juridique")
     op.drop_index(op.f("ix_permission_libelle"), table_name="permission")
     op.drop_table("permission")
     op.drop_index(op.f("ix_abonnement_libelle"), table_name="abonnement")

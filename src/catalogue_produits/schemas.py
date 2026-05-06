@@ -43,7 +43,7 @@ class CatalogueBase(BaseModel):
 class CatalogueCreate(CatalogueBase):
     """
     Schéma pour l'ajout d'un nouveau produit au catalogue.
-    Les champs id_abonnement et id_utilisateur sont exclus ici car ils sont
+    Les champs id_entreprise et id_utilisateur sont exclus ici car ils sont
     injectés de manière sécurisée par le backend via le header et le token.
     """
 
@@ -73,7 +73,7 @@ class CatalogueRead(CatalogueBase):
     """
 
     id: int
-    id_abonnement: int
+    id_entreprise: int
     id_utilisateur: int
     date_creation: datetime
     date_modification: datetime

@@ -5,7 +5,7 @@ from sqlalchemy import Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from src.abonnements.models import Abonnement
+    from src.entreprises.models import Entreprise
     from src.utilisateurs.models import Utilisateur
 
 
@@ -14,7 +14,7 @@ class Client(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
 
-    id_abonnement: int = Field(foreign_key="abonnement.id")
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
     id_createur: int = Field(foreign_key="utilisateur.id")
     id_modificateur: int | None = Field(default=None, foreign_key="utilisateur.id")
 
@@ -48,4 +48,4 @@ class Client(SQLModel, table=True):
     modificateur: Optional["Utilisateur"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Client.id_modificateur]"}
     )
-    abonnement: "Abonnement" = Relationship()
+    entreprise: Optional["Entreprise"] = Relationship()

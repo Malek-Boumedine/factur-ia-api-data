@@ -4,24 +4,28 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from src.abonnements.models import Abonnement, UtilisateurAbonnement
+from src.abonnements.models import Abonnement, EntrepriseAbonnement
 from src.abonnements.schemas import (
     AbonnementCreate,
     AbonnementRead,
     AbonnementUpdate,
-    UtilisateurAbonnementRead,
+    EntrepriseAbonnementRead,
 )
 from src.auth.dependencies import RequirePermission, get_current_user
 from src.core.database import get_session
+from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
 
 router = APIRouter(prefix="/abonnements", tags=["Gestion des Abonnements"])
 
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+CurrentUserDep = Annotated[Utilisateur, Depends(get_current_user)]
+
 
 @router.get("/", response_model=list[AbonnementRead])
 async def list_plans(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    current_user: Annotated[Utilisateur, Depends(get_current_user)],
+    session: SessionDep,
+    current_user: CurrentUserDep,
 ) -> Any:
     """
     Liste tous les plans d'abonnement disponibles sur la plateforme.
@@ -32,16 +36,22 @@ async def list_plans(
     return result.all()
 
 
-@router.get("/me", response_model=list[UtilisateurAbonnementRead])
+@router.get("/me", response_model=list[EntrepriseAbonnementRead])
 async def get_my_subscriptions(
-    current_user: Annotated[Utilisateur, Depends(get_current_user)],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    current_user: CurrentUserDep,
+    session: SessionDep,
 ) -> Any:
     """
-    Récupère les abonnements auxquels l'utilisateur actuel est rattaché.
+    Récupère les abonnements des entreprises (espaces de travail)
+    auxquelles l'utilisateur actuel est rattaché.
     """
-    statement = select(UtilisateurAbonnement).where(
-        UtilisateurAbonnement.id_utilisateur == current_user.id
+    statement = (
+        select(EntrepriseAbonnement)
+        .join(
+            UtilisateurEntreprise,
+            UtilisateurEntreprise.id_entreprise == EntrepriseAbonnement.id_entreprise,  # type: ignore
+        )
+        .where(UtilisateurEntreprise.id_utilisateur == current_user.id)
     )
     result = await session.exec(statement)
     return result.all()
@@ -51,7 +61,7 @@ async def get_my_subscriptions(
 async def create_plan(
     plan_in: AbonnementCreate,
     _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: SessionDep,
 ) -> Any:
     """
     Crée un nouveau plan d'abonnement.
@@ -69,7 +79,7 @@ async def update_plan(
     abonnement_id: int,
     plan_in: AbonnementUpdate,
     _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: SessionDep,
 ) -> Any:
     """
     Modifie les caractéristiques d'un plan d'abonnement.
@@ -93,7 +103,7 @@ async def update_plan(
 async def delete_plan(
     abonnement_id: int,
     _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
-    session: Annotated[AsyncSession, Depends(get_session)],
+    session: SessionDep,
 ) -> None:
     """
     Supprime un plan d'abonnement.
