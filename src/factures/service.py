@@ -236,3 +236,105 @@ async def valider_facture_brouillon(
         )
 
     return facture_complete
+
+
+async def generer_avoir_brouillon(
+    session: AsyncSession,
+    facture_id: int,
+    id_entreprise: int,
+    id_createur: int,
+) -> Facture:
+    """
+    Génère un brouillon d'avoir à partir d'une facture validée existante.
+    """
+    # 1. Récupérer la facture d'origine avec ses lignes
+    stmt_origine = (
+        select(Facture)
+        .where(Facture.id == facture_id)
+        .where(Facture.id_entreprise == id_entreprise)
+        .options(
+            selectinload(Facture.statut_ref),  # type: ignore
+            selectinload(Facture.lignes),  # type: ignore
+        )
+    )
+    facture_origine = (await session.exec(stmt_origine)).first()
+
+    if not facture_origine:
+        raise FactureNotFoundError(
+            "Facture d'origine introuvable pour cette entreprise."
+        )
+
+    if (
+        facture_origine.statut_ref is None
+        or facture_origine.statut_ref.libelle != "Validée"
+    ):
+        raise TransitionStatutInvalideError(
+            "Seule une facture au statut 'Validée' peut faire l'objet d'un avoir."
+        )
+
+    # 2. Récupérer le statut Brouillon
+    stmt_brouillon = select(StatutFacture).where(StatutFacture.libelle == "Brouillon")
+    statut_brouillon = (await session.exec(stmt_brouillon)).first()
+
+    if statut_brouillon is None or statut_brouillon.id is None:
+        raise StatutNonConfigureError("Le statut 'Brouillon' n'est pas configuré.")
+
+    # 3. Création de la coquille de l'avoir
+    numero_provisoire = f"BROUILLON-AV-{uuid.uuid4().hex[:6].upper()}"
+
+    db_avoir = Facture(
+        id_entreprise=id_entreprise,
+        id_createur=id_createur,
+        id_client=facture_origine.id_client,
+        id_document=facture_origine.id_document,
+        numero_facture=numero_provisoire,
+        date_emission=datetime.now().date(),
+        date_echeance=datetime.now().date(),
+        devise=facture_origine.devise,
+        type_facture="avoir",
+        id_statut=statut_brouillon.id,
+        mode_paiement=facture_origine.mode_paiement,
+        iban=facture_origine.iban,
+        # Astuce de traçabilité : on note la référence de la facture d'origine
+        reference_commande=f"Réf. Facture : {facture_origine.numero_facture}",
+        notes="Avoir généré suite à une annulation ou modification.",
+        total_ht=facture_origine.total_ht,
+        total_tva=facture_origine.total_tva,
+        total_ttc=facture_origine.total_ttc,
+    )
+
+    session.add(db_avoir)
+    await session.flush()
+
+    # 4. Duplication stricte des lignes
+    for ligne_origine in facture_origine.lignes:
+        db_ligne = FactureLigne(
+            id_facture=db_avoir.id,
+            ordre=ligne_origine.ordre,
+            designation=ligne_origine.designation,
+            quantite=ligne_origine.quantite,
+            unite=ligne_origine.unite,
+            prix_unitaire_ht=ligne_origine.prix_unitaire_ht,
+            id_taux_tva=ligne_origine.id_taux_tva,
+            montant_ht=ligne_origine.montant_ht,
+            montant_tva=ligne_origine.montant_tva,
+            montant_ttc=ligne_origine.montant_ttc,
+        )
+        session.add(db_ligne)
+
+    await session.commit()
+
+    # 5. Eager Loading pour le retour complet
+    stmt_final = (
+        select(Facture)
+        .where(Facture.id == db_avoir.id)
+        .options(selectinload(Facture.lignes))  # type: ignore
+    )
+    avoir_complet = (await session.exec(stmt_final)).first()
+
+    if avoir_complet is None:
+        raise FacturationError(
+            "Erreur lors de la récupération de l'avoir après sa création."
+        )
+
+    return avoir_complet

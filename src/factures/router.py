@@ -13,7 +13,11 @@ from src.factures.exceptions import (
     TransitionStatutInvalideError,
 )
 from src.factures.schemas import FactureCreate, FactureReadWithLignes
-from src.factures.service import create_facture_brouillon, valider_facture_brouillon
+from src.factures.service import (
+    create_facture_brouillon,
+    generer_avoir_brouillon,
+    valider_facture_brouillon,
+)
 from src.utilisateurs.models import Utilisateur
 
 router = APIRouter(prefix="/factures", tags=["Gestion des Factures"])
@@ -80,6 +84,46 @@ async def valider_brouillon_endpoint(
             id_entreprise=id_entreprise,
         )
         return facture_validee
+
+    except FactureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+    except TransitionStatutInvalideError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
+
+    except (StatutNonConfigureError, FacturationError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        ) from e
+
+
+@router.post(
+    "/{facture_id}/avoir",
+    response_model=FactureReadWithLignes,
+    status_code=status.HTTP_201_CREATED,
+)
+async def generer_avoir_endpoint(
+    facture_id: int,
+    session: SessionDep,
+    current_user: CurrentUserDep,
+    id_entreprise: TenantDep,
+) -> Any:
+    """
+    Génère un avoir (en brouillon) à partir d'une facture validée.
+    """
+    try:
+        if current_user.id is None:
+            raise HTTPException(status_code=500, detail="ID utilisateur manquant")
+
+        db_avoir = await generer_avoir_brouillon(
+            session=session,
+            facture_id=facture_id,
+            id_entreprise=id_entreprise,
+            id_createur=current_user.id,
+        )
+        return db_avoir
 
     except FactureNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
