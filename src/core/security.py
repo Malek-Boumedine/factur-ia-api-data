@@ -45,7 +45,7 @@ def create_access_token(
 
 
 if __name__ == "__main__":
-    # print(get_password_hash("azerty"))
+    print(get_password_hash("Azerty1234+"))
     print(
         verify_password(
             "azerty", "$2b$12$10gR8ovMUn9x.OR6lbfjY.xgL6Rvu5q5eEo7W3bSP3l3uhaLjUps2"

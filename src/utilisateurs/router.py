@@ -54,7 +54,7 @@ async def update_my_profile(
 @router.get("/", response_model=list[UtilisateurRead])
 async def list_team_members(
     entreprise_id: Annotated[int, Depends(verify_tenant_access)],
-    _: Annotated[Utilisateur, Depends(RequirePermission("user:read"))],
+    _: Annotated[Utilisateur, Depends(RequirePermission("users:read"))],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Any:
     """

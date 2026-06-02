@@ -5,9 +5,15 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.database import get_session
-from src.factures.exceptions import StatutNonConfigureError, TauxTvaIntrouvableError
+from src.factures.exceptions import (
+    FacturationError,
+    FactureNotFoundError,
+    StatutNonConfigureError,
+    TauxTvaIntrouvableError,
+    TransitionStatutInvalideError,
+)
 from src.factures.schemas import FactureCreate, FactureReadWithLignes
-from src.factures.service import create_facture_brouillon
+from src.factures.service import create_facture_brouillon, valider_facture_brouillon
 from src.utilisateurs.models import Utilisateur
 
 router = APIRouter(prefix="/factures", tags=["Gestion des Factures"])
@@ -48,6 +54,42 @@ async def create_brouillon_endpoint(
 
     except StatutNonConfigureError as e:
         # Erreur serveur : La base de données est mal configurée (HTTP 500)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        ) from e
+
+
+@router.post(
+    "/{facture_id}/valider",
+    response_model=FactureReadWithLignes,
+    status_code=status.HTTP_200_OK,
+)
+async def valider_brouillon_endpoint(
+    facture_id: int,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+) -> Any:
+    """
+    Valide un brouillon de facture.
+    Génère le numéro définitif et fige les données du client (Snapshot).
+    """
+    try:
+        facture_validee = await valider_facture_brouillon(
+            session=session,
+            facture_id=facture_id,
+            id_entreprise=id_entreprise,
+        )
+        return facture_validee
+
+    except FactureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+    except TransitionStatutInvalideError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
+
+    except (StatutNonConfigureError, FacturationError) as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         ) from e
