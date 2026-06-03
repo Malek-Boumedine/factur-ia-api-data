@@ -225,3 +225,4 @@ __marimo__/
 # ajouts manuels
 todo*
 local_ci.sh
+/uploads
