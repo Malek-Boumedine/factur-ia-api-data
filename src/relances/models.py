@@ -64,8 +64,7 @@ class Relance(SQLModel, table=True):
     __tablename__ = "relance"
 
     id: int | None = Field(default=None, primary_key=True)
-
-    # Clés étrangères
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
     id_facture: int = Field(foreign_key="facture.id", index=True)
     id_modele_relance: int | None = Field(default=None, foreign_key="modele_relance.id")
 
@@ -87,3 +86,4 @@ class Relance(SQLModel, table=True):
     facture: "Facture" = Relationship()
     modele: Optional["ModeleRelance"] = Relationship(back_populates="relances")
     utilisateur: Optional["Utilisateur"] = Relationship()
+    entreprise: "Entreprise" = Relationship()
