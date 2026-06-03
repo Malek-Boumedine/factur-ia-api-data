@@ -33,11 +33,27 @@ TAUX_TVA = [
 ]
 
 STATUTS_FACTURE = [
-    {"libelle": "brouillon", "description": "Facture en cours de rédaction"},
-    {"libelle": "envoyée", "description": "Facture transmise au client"},
-    {"libelle": "payée", "description": "Paiement reçu et confirmé"},
-    {"libelle": "en_retard", "description": "Échéance dépassée sans paiement"},
-    {"libelle": "annulée", "description": "Facture annulée"},
+    {
+        "libelle": "brouillon",
+        "description": "Facture en cours de rédaction ou issue de l'OCR.",
+    },
+    {"libelle": "validée", "description": "Facture scellée et inaltérable."},
+    {"libelle": "en_attente_pdp", "description": "En attente d'envoi vers la PDP."},
+    {
+        "libelle": "erreur_transmission",
+        "description": "Échec technique de l'envoi à la PDP.",
+    },
+    {"libelle": "deposee_pdp", "description": "Dépôt réussi sur la plateforme PDP."},
+    {
+        "libelle": "rejetee_pdp",
+        "description": "Rejet métier par la PDP (ex: SIRET invalide).",
+    },
+    {"libelle": "envoyee_client", "description": "Transmise directement au client."},
+    {"libelle": "en_retard", "description": "La date d'échéance est dépassée."},
+    {"libelle": "partiellement_payee", "description": "Paiement partiel reçu."},
+    {"libelle": "payee", "description": "Intégralement réglée."},
+    {"libelle": "contestee", "description": "Mise en litige par le client."},
+    {"libelle": "annulee", "description": "Annulée par un avoir."},
 ]
 
 STATUTS_DECLARATION = [

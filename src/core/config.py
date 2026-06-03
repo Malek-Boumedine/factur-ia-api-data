@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     ALGORITHM: str
     SECRET_KEY: str
 
+    SECRET_OCR_TOKEN: str
+
     @property
     def DATABASE_URL(self) -> str:
         """
