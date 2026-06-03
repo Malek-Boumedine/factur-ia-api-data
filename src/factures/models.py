@@ -124,32 +124,6 @@ class FactureLigne(SQLModel, table=True):
     taux_tva_ref: "TauxTva" = Relationship()
 
 
-class Avoir(SQLModel, table=True):
-    """Représente l'annulation totale ou partielle d'une facture émise."""
-
-    __tablename__ = "avoir"
-
-    id: int | None = Field(default=None, primary_key=True)
-    id_facture_origine: int = Field(foreign_key="facture.id")
-    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
-    id_createur: int = Field(foreign_key="utilisateur.id")
-
-    numero_avoir: str = Field(unique=True, max_length=50)
-    date_emission: date = Field(default_factory=date.today)
-    motif: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
-
-    total_ht: Decimal = Field(max_digits=12, decimal_places=2)
-    total_tva: Decimal = Field(max_digits=12, decimal_places=2)
-    total_ttc: Decimal = Field(max_digits=12, decimal_places=2)
-
-    date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
-    # relations
-    facture_origine: "Facture" = Relationship()
-    entreprise: "Entreprise" = Relationship()
-    createur: "Utilisateur" = Relationship()
-
-
 class Paiement(SQLModel, table=True):
     """Tracé des règlements reçus pour une facture spécifique."""
 

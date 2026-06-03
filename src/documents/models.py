@@ -43,6 +43,7 @@ class Document(SQLModel, table=True):
     id_utilisateur: int = Field(foreign_key="utilisateur.id")
 
     nom_fichier: str = Field(max_length=255)
+    nom_original: str = Field(max_length=255)
     date_chargement: datetime = Field(default_factory=lambda: datetime.now(UTC))
     statut: StatutDocument = Field(default=StatutDocument.EN_ATTENTE)
 

@@ -8,6 +8,7 @@ from src.auth.router import router as auth_router
 from src.catalogue_produits.router import router as catalogue_produits_router
 from src.clients.router import router as clients_router
 from src.core.config import settings
+from src.documents.router import router as documents_router
 from src.factures.router import router as factures_router
 from src.utilisateurs.router import router as utilisateurs_router
 
@@ -50,6 +51,7 @@ def get_application() -> FastAPI:
     _app.include_router(utilisateurs_router)
     _app.include_router(catalogue_produits_router)
     _app.include_router(factures_router)
+    _app.include_router(documents_router)
 
     return _app
 
