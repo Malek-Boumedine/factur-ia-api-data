@@ -1,30 +1,39 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, Text
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from src.abonnements.models import Abonnement
+    from src.entreprises.models import Entreprise
     from src.factures.models import Facture, StatutFacture
 
 
 class EvenementPdp(SQLModel, table=True):
+    """
+    Journal des événements provenant de la PDP ou du PPF (Chorus Pro).
+    Trace les changements de statuts officiels d'une facture au niveau fiscal.
+    """
+
     __tablename__ = "evenement_pdp"
 
     id: int | None = Field(default=None, primary_key=True)
     id_facture: int = Field(foreign_key="facture.id")
+
+    # historisation du cycle de vie fiscal
     id_statut_avant: int | None = Field(default=None, foreign_key="statut_facture.id")
     id_statut_apres: int = Field(foreign_key="statut_facture.id")
 
-    source: str | None = Field(default=None, max_length=100)
+    source: str | None = Field(
+        default=None, max_length=100
+    )  # ex: "PDP_ORANGE", "CHORUS_PRO, manuel ..."
     message: str | None = Field(default=None, sa_column=Column(Text))
     date_evenement: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # relations
     facture: "Facture" = Relationship()
-    statut_avant: "StatutFacture" = Relationship(
+    statut_avant: Optional["StatutFacture"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[EvenementPdp.id_statut_avant]"}
     )
     statut_apres: "StatutFacture" = Relationship(
@@ -33,6 +42,8 @@ class EvenementPdp(SQLModel, table=True):
 
 
 class StatutDeclaration(SQLModel, table=True):
+    """Référentiel des statuts de déclaration (ex: En attente, Transmise, Acceptée)."""
+
     __tablename__ = "statut_declaration"
 
     id: int | None = Field(default=None, primary_key=True)
@@ -44,27 +55,34 @@ class StatutDeclaration(SQLModel, table=True):
 
 
 class Declaration(SQLModel, table=True):
+    """
+    Représente une déclaration récapitulative de TVA / E-reporting
+    envoyée par l'entreprise à l'administration fiscale.
+    """
+
     __tablename__ = "declaration"
 
     id: int | None = Field(default=None, primary_key=True)
-    id_abonnement: int = Field(foreign_key="abonnement.id")
+
+    # Isolation par entreprise (Tenant)
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
 
     periode_debut: date = Field(...)
     periode_fin: date = Field(...)
+
     montant_ht: Decimal = Field(max_digits=12, decimal_places=2)
     montant_tva: Decimal = Field(max_digits=12, decimal_places=2)
-    montant_ttc: Decimal = Field(
-        max_digits=12, decimal_places=2
-    )  # contrôle de cohérence TVA
+    montant_ttc: Decimal = Field(max_digits=12, decimal_places=2)
 
     id_statut_declaration: int = Field(foreign_key="statut_declaration.id")
 
+    # Données de transmission
     reference_envoi: str | None = Field(
         default=None, max_length=100
-    )  # accusé de réception PDP/PPF
+    )  # ID technique PPF
     date_envoi: datetime | None = Field(default=None)
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # relations
-    abonnement: "Abonnement" = Relationship()
+    entreprise: "Entreprise" = Relationship()
     statut_ref: "StatutDeclaration" = Relationship(back_populates="declarations")

@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Column, DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from src.abonnements.models import Abonnement
-    from src.utilisateurs.models import Utilisateur, Ville
+    from src.entreprises.models import Entreprise
+    from src.utilisateurs.models import Utilisateur
 
 
 class Client(SQLModel, table=True):
@@ -14,7 +14,7 @@ class Client(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
 
-    id_abonnement: int = Field(foreign_key="abonnement.id")
+    id_entreprise: int = Field(foreign_key="entreprise.id", index=True)
     id_createur: int = Field(foreign_key="utilisateur.id")
     id_modificateur: int | None = Field(default=None, foreign_key="utilisateur.id")
 
@@ -25,7 +25,8 @@ class Client(SQLModel, table=True):
 
     adresse: str | None = Field(default=None, max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
-    id_ville: int | None = Field(default=None, foreign_key="ville.id")
+    code_postal: str = Field(max_length=10, index=True)
+    ville: str = Field(max_length=150, index=True)
 
     email: str | None = Field(default=None, index=True, max_length=255)
 
@@ -41,11 +42,10 @@ class Client(SQLModel, table=True):
     date_desactivation: datetime | None = Field(default=None)
 
     # Relations
-    ville: "Ville" | None = Relationship(back_populates="clients")
-    createur: "Utilisateur" | None = Relationship(
+    createur: Optional["Utilisateur"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Client.id_createur]"}
     )
-    modificateur: "Utilisateur" | None = Relationship(
+    modificateur: Optional["Utilisateur"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Client.id_modificateur]"}
     )
-    abonnement: "Abonnement" = Relationship()
+    entreprise: Optional["Entreprise"] = Relationship()
