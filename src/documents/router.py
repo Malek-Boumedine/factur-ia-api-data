@@ -3,13 +3,31 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Security,
+    UploadFile,
+    status,
+)
+from fastapi.security import APIKeyHeader
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_tenant_access
+from src.core.config import settings
 from src.core.database import get_session
-from src.documents.models import Document, StatutDocument
+from src.documents.models import (
+    Document,
+    ExtractionOcr,
+    StatutDocument,
+    StatutExtraction,
+)
+from src.documents.schemas import OcrWebhookPayload
 from src.utilisateurs.models import Utilisateur
+
+API_KEY_HEADER = APIKeyHeader(name="X-OCR-Secret-Token", auto_error=True)
 
 router = APIRouter(prefix="/documents", tags=["Documents & OCR"])
 
@@ -81,4 +99,49 @@ async def upload_document(
         "nom_fichier": db_document.nom_fichier,
         "nom_original": db_document.nom_original,
         "statut": db_document.statut,
+    }
+
+
+@router.post("/webhook/ocr", status_code=status.HTTP_200_OK)
+async def webhook_ocr_result(
+    payload: OcrWebhookPayload,
+    session: session_dep,
+    api_key: str = Security(API_KEY_HEADER),
+) -> dict[str, Any]:
+    """
+    Réceptionne les résultats de l'IA.
+    Met à jour le statut du document et sauvegarde les données extraites.
+    """
+    # 1. Vérification de sécurité
+    if api_key != settings.SECRET_OCR_TOKEN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token IA invalide ou manquant.",
+        )
+
+    # 2. Récupérer le document concerné
+    document = await session.get(Document, payload.id_document)
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document introuvable."
+        )
+
+    # 3. Mettre à jour le statut du Document
+    document.statut = StatutDocument.TRAITE
+    session.add(document)
+
+    # 4. Enregistrer l'extraction dans la base de données
+    extraction = ExtractionOcr(
+        id_document=document.id,
+        contenu_brut=payload.model_dump(mode="json"),
+        score_confiance=payload.score_confiance,
+        statut=StatutExtraction.SUCCES,
+    )
+    session.add(extraction)
+
+    await session.commit()
+
+    return {
+        "message": "Résultats OCR intégrés avec succès",
+        "id_extraction": extraction.id,
     }
