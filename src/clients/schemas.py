@@ -66,3 +66,38 @@ class ClientRead(ClientBase):
     date_desactivation: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SearchSireneSiretResponse(BaseModel):
+    """
+    Schéma représentant les données renvoyées
+    par l'API gouvernementale lors d'une recherche par SIRET.
+    Les champs sont alignés avec ClientBase pour
+    faciliter le pré-remplissage côté front-end.
+    """
+
+    siret: str | None = Field(
+        default=None, max_length=14, description="Numéro SIRET à 14 chiffres"
+    )
+    sirene: str | None = Field(
+        default=None, max_length=9, description="Numéro SIRENE à 9 chiffres"
+    )
+    raison_sociale: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Nom ou raison sociale de l'entreprise",
+    )
+    adresse: str | None = Field(
+        default=None, max_length=255, description="Numéro et voie du siège social"
+    )
+    code_postal: str | None = Field(default=None, max_length=10)
+    ville: str | None = Field(default=None, max_length=150)
+    numero_tva: str | None = Field(
+        default=None, max_length=20, description="Numéro de TVA intracommunautaire"
+    )
+    activite_principale: str | None = Field(
+        default=None, max_length=255, description="Activité principale de l'entreprise"
+    )
+    nom_dirigeant: str | None = Field(default=None, max_length=255)
+    prenom_dirigeant: str | None = Field(default=None, max_length=255)
+    type_dirigeant: str | None = Field(default=None, max_length=255)
