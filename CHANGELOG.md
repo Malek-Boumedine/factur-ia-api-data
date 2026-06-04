@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-06-04)
+
+### Features
+
+- **clients**: Création de l'endpoint de recherche SIRENE/SIRET
+  ([`83b5af6`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/83b5af6597ff9484b534281b2b783cd488c1868d))
+
+
 ## v1.2.0 (2026-06-03)
 
 ### Features
