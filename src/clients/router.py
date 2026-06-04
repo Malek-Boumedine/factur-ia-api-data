@@ -10,8 +10,14 @@ from src.auth.dependencies import (
     verify_tenant_access,
 )
 from src.clients.models import Client
-from src.clients.schemas import ClientCreate, ClientRead, ClientUpdate
+from src.clients.schemas import (
+    ClientCreate,
+    ClientRead,
+    ClientUpdate,
+    SearchSireneSiretResponse,
+)
 from src.core.database import get_session
+from src.integrations.siren_gouv.client import get_company_by_identifier
 from src.utilisateurs.models import Utilisateur
 
 router = APIRouter(prefix="/clients", tags=["Ecosystème Client"])
@@ -150,3 +156,37 @@ async def delete_client(
 
     await session.delete(db_client)
     await session.commit()
+
+
+@router.get(
+    "/recherche-sirene/{identifiant}",
+    response_model=SearchSireneSiretResponse,
+    summary="Rechercher une entreprise via son SIREN ou SIRET",
+)
+async def search_company_by_identifier(identifiant: str) -> dict[str, Any]:
+    """
+    Interroge l'API gouvernementale pour
+    pré-remplir les données d'un client.
+    Accepte un SIREN (9 chiffres) ou un SIRET (14 chiffres).
+    """
+    # on enlève les espaces éventuels
+    clean_id = identifiant.replace(" ", "")
+
+    # Validation pour 9 (SIREN) ou 14 (SIRET) chiffres
+    if len(clean_id) not in (9, 14) or not clean_id.isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'identifiant doit contenir \
+            exactement 9 (SIREN) ou 14 (SIRET) chiffres.",
+        )
+
+    company_data = await get_company_by_identifier(clean_id)
+
+    if not company_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aucune entreprise \
+            trouvée pour cet identifiant.",
+        )
+
+    return company_data
