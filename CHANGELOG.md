@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-06-03)
+
+### Features
+
+- **documents**: Création du webhook de retour OCR
+  ([`eaf2c87`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/eaf2c872d5bcf0b00ae0843f5850204dcfab1ebd))
+
+- **documents**: Implémentation de l'upload de fichiers
+  ([`22667cc`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/22667cc5b70869973783f7db3875af387af8d734))
+
+
 ## v1.1.0 (2026-06-03)
 
 ### Bug Fixes
