@@ -24,6 +24,43 @@ from src.utilisateurs.schemas import (
 router = APIRouter(prefix="/utilisateurs", tags=["Gestion des Utilisateurs"])
 
 
+async def _membre_read_dict(
+    session: AsyncSession, db_user: Utilisateur, entreprise_id: int
+) -> dict[str, Any]:
+    """
+    Enrichit un utilisateur avec son rôle métier et son statut admin dans le
+    contexte de l'entreprise active, pour renvoyer un schéma de lecture complet.
+
+    Indispensable pour que le client connaisse l'`est_admin` courant et ne le
+    réinitialise pas par erreur lors d'une édition.
+    """
+    statement = (
+        select(UtilisateurEntreprise.est_admin, Role.libelle)
+        .outerjoin(
+            UtilisateurRole,
+            and_(
+                UtilisateurRole.id_utilisateur == UtilisateurEntreprise.id_utilisateur,
+                or_(
+                    UtilisateurRole.id_entreprise == entreprise_id,
+                    UtilisateurRole.id_entreprise == None,  # noqa: E711
+                ),
+            ),
+        )
+        .outerjoin(Role, UtilisateurRole.id_role == Role.id)  # type: ignore
+        .where(
+            UtilisateurEntreprise.id_utilisateur == db_user.id,
+            UtilisateurEntreprise.id_entreprise == entreprise_id,
+        )
+    )
+    row = (await session.exec(statement)).first()
+
+    user_dict = db_user.model_dump()
+    if row is not None:
+        user_dict["est_admin"] = row[0]
+        user_dict["role"] = row[1]
+    return user_dict
+
+
 @router.get("/me", response_model=UtilisateurRead)
 async def get_my_profile(
     current_user: Annotated[Utilisateur, Depends(get_current_user)],
@@ -63,7 +100,7 @@ async def list_team_members(
     Liste tous les utilisateurs rattachés à l'entreprise active (l'équipe).
     """
     statement = (
-        select(Utilisateur, Role.libelle)
+        select(Utilisateur, Role.libelle, UtilisateurEntreprise.est_admin)
         .join(
             UtilisateurEntreprise,
             Utilisateur.id == UtilisateurEntreprise.id_utilisateur,  # type: ignore
@@ -84,9 +121,10 @@ async def list_team_members(
 
     results = await session.exec(statement)
     membres = []
-    for user, role_libelle in results:
+    for user, role_libelle, est_admin in results:
         user_dict = user.model_dump()
         user_dict["role"] = role_libelle
+        user_dict["est_admin"] = est_admin
         membres.append(user_dict)
 
     return membres
@@ -133,7 +171,7 @@ async def create_team_member(
     # 5. Validation globale
     await session.commit()
     await session.refresh(db_user)
-    return db_user
+    return await _membre_read_dict(session, db_user, entreprise_id)
 
 
 @router.post(
@@ -259,4 +297,4 @@ async def update_team_member(
     await session.commit()
     await session.refresh(db_user)
 
-    return db_user
+    return await _membre_read_dict(session, db_user, entreprise_id)

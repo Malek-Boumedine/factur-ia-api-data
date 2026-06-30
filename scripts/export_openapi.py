@@ -1,4 +1,4 @@
-"""Exporte le schéma OpenAPI de l'API FastAPI vers ``contracts/openapi.json``.
+"""Exporte   vers ``contracts/openapi.json``.
 
 Source de vérité : le code FastAPI (``src/main.py``). Ce script régénère
 l'artefact versionné consommé par le repo ``factur-ia-web-django`` pour générer

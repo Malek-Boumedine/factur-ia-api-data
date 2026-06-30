@@ -3478,8 +3478,15 @@
             "title": "Prenom"
           },
           "adresse": {
-            "type": "string",
-            "maxLength": 255,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Adresse"
           },
           "adresse_complement": {
@@ -3495,13 +3502,27 @@
             "title": "Adresse Complement"
           },
           "code_postal": {
-            "type": "string",
-            "maxLength": 10,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Code Postal"
           },
           "ville": {
-            "type": "string",
-            "maxLength": 150,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Ville"
           },
           "email": {
@@ -3549,9 +3570,6 @@
         "required": [
           "nom",
           "prenom",
-          "adresse",
-          "code_postal",
-          "ville",
           "email",
           "password",
           "id_role"
@@ -3572,8 +3590,15 @@
             "title": "Prenom"
           },
           "adresse": {
-            "type": "string",
-            "maxLength": 255,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Adresse"
           },
           "adresse_complement": {
@@ -3589,13 +3614,27 @@
             "title": "Adresse Complement"
           },
           "code_postal": {
-            "type": "string",
-            "maxLength": 10,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Code Postal"
           },
           "ville": {
-            "type": "string",
-            "maxLength": 150,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Ville"
           },
           "email": {
@@ -3657,15 +3696,24 @@
               }
             ],
             "title": "Role"
+          },
+          "est_admin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Admin",
+            "description": "Statut administrateur du membre dans l'entreprise active. Lecture seule : à utiliser pour pré-remplir le formulaire d'édition et éviter de retirer les droits par erreur."
           }
         },
         "type": "object",
         "required": [
           "nom",
           "prenom",
-          "adresse",
-          "code_postal",
-          "ville",
           "email",
           "id",
           "date_creation",
