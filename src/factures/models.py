@@ -62,6 +62,11 @@ class Facture(SQLModel, table=True):
     id_client: int | None = Field(default=None, foreign_key="client.id")
     id_document: int | None = Field(default=None, foreign_key="document.id")
 
+    # Lien comptable vers la facture d'origine (renseigné uniquement pour un avoir)
+    id_facture_origine: int | None = Field(
+        default=None, foreign_key="facture.id", index=True
+    )
+
     numero_facture: str = Field(unique=True, index=True, max_length=50)
     date_emission: date = Field(default_factory=date.today)
     date_echeance: date | None = Field(default=None)
@@ -99,6 +104,9 @@ class Facture(SQLModel, table=True):
     entreprise: "Entreprise" = Relationship()
     client: Optional["Client"] = Relationship()
     document: Optional["Document"] = Relationship()
+    facture_origine: Optional["Facture"] = Relationship(
+        sa_relationship_kwargs={"remote_side": "Facture.id"}
+    )
 
 
 class FactureLigne(SQLModel, table=True):

@@ -287,6 +287,8 @@ async def generer_avoir_brouillon(
         id_createur=id_createur,
         id_client=facture_origine.id_client,
         id_document=facture_origine.id_document,
+        # Lien comptable direct (FK) vers la facture d'origine
+        id_facture_origine=facture_origine.id,
         numero_facture=numero_provisoire,
         date_emission=datetime.now().date(),
         date_echeance=datetime.now().date(),
@@ -295,30 +297,31 @@ async def generer_avoir_brouillon(
         id_statut=statut_brouillon.id,
         mode_paiement=facture_origine.mode_paiement,
         iban=facture_origine.iban,
-        # Astuce de traçabilité : on note la référence de la facture d'origine
+        # Traçabilité lisible (la source de vérité reste id_facture_origine)
         reference_commande=f"Réf. Facture : {facture_origine.numero_facture}",
         notes="Avoir généré suite à une annulation ou modification.",
-        total_ht=facture_origine.total_ht,
-        total_tva=facture_origine.total_tva,
-        total_ttc=facture_origine.total_ttc,
+        # Montants stockés en négatif : un SUM global donne le vrai CA
+        total_ht=-facture_origine.total_ht,
+        total_tva=-facture_origine.total_tva,
+        total_ttc=-facture_origine.total_ttc,
     )
 
     session.add(db_avoir)
     await session.flush()
 
-    # 4. Duplication stricte des lignes
+    # 4. Duplication des lignes en négatif (quantités et montants inversés)
     for ligne_origine in facture_origine.lignes:
         db_ligne = FactureLigne(
             id_facture=db_avoir.id,
             ordre=ligne_origine.ordre,
             designation=ligne_origine.designation,
-            quantite=ligne_origine.quantite,
+            quantite=-ligne_origine.quantite,
             unite=ligne_origine.unite,
             prix_unitaire_ht=ligne_origine.prix_unitaire_ht,
             id_taux_tva=ligne_origine.id_taux_tva,
-            montant_ht=ligne_origine.montant_ht,
-            montant_tva=ligne_origine.montant_tva,
-            montant_ttc=ligne_origine.montant_ttc,
+            montant_ht=-ligne_origine.montant_ht,
+            montant_tva=-ligne_origine.montant_tva,
+            montant_ttc=-ligne_origine.montant_ttc,
         )
         session.add(db_ligne)
 
