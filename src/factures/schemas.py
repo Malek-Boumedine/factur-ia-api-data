@@ -124,6 +124,9 @@ class FactureRead(FactureBase):
     id_createur: int
     numero_facture: str
     id_statut: int
+    id_facture_origine: int | None = Field(
+        default=None, description="Facture d'origine si ce document est un avoir"
+    )
 
     # Snapshots (historique figé)
     siret_emetteur: str | None = None

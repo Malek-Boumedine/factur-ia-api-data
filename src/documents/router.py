@@ -18,13 +18,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.config import settings
 from src.core.database import get_session
-from src.documents.models import (
-    Document,
-    ExtractionOcr,
-    StatutDocument,
-    StatutExtraction,
-)
+from src.documents.exceptions import DocumentIntrouvableError
+from src.documents.models import Document, StatutDocument
 from src.documents.schemas import OcrWebhookPayload
+from src.documents.service import traiter_callback_ocr
 from src.utilisateurs.models import Utilisateur
 
 API_KEY_HEADER = APIKeyHeader(name="X-OCR-Secret-Token", auto_error=True)
@@ -110,7 +107,10 @@ async def webhook_ocr_result(
 ) -> dict[str, Any]:
     """
     Réceptionne les résultats de l'IA.
-    Met à jour le statut du document et sauvegarde les données extraites.
+
+    Génère automatiquement un brouillon de facture à partir des données
+    extraites et lie l'extraction à ce brouillon. Si les données sont
+    inexploitables, le document passe en erreur et l'extraction en échec.
     """
     # 1. Vérification de sécurité
     if api_key != settings.SECRET_OCR_TOKEN:
@@ -119,29 +119,15 @@ async def webhook_ocr_result(
             detail="Token IA invalide ou manquant.",
         )
 
-    # 2. Récupérer le document concerné
-    document = await session.get(Document, payload.id_document)
-    if not document:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Document introuvable."
-        )
-
-    # 3. Mettre à jour le statut du Document
-    document.statut = StatutDocument.TRAITE
-    session.add(document)
-
-    # 4. Enregistrer l'extraction dans la base de données
-    extraction = ExtractionOcr(
-        id_document=document.id,
-        contenu_brut=payload.model_dump(mode="json"),
-        score_confiance=payload.score_confiance,
-        statut=StatutExtraction.SUCCES,
-    )
-    session.add(extraction)
-
-    await session.commit()
+    # 2. Orchestration : création auto du brouillon + traçage de l'extraction
+    try:
+        extraction = await traiter_callback_ocr(session, payload)
+    except DocumentIntrouvableError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     return {
         "message": "Résultats OCR intégrés avec succès",
         "id_extraction": extraction.id,
+        "statut": extraction.statut,
+        "id_facture": extraction.id_facture,
     }
