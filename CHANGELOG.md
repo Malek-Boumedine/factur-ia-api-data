@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-06-30)
+
+### Bug Fixes
+
+- Adaptation de plusieurs modèles à ceux du schema de la bdd
+  ([`9515b83`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/9515b83f8f0469a7ccf12385228a559475a52340))
+
+- **utilisateurs**: Expose est_admin en lecture et assouplit les champs d'adresse
+  ([`1eb4404`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/1eb4404efc5bbdaaf89fe7d176e580cd42681ef7))
+
+### Chores
+
+- **contracts**: Ajoute l'export OpenAPI et le contrat versionné contracts/openapi.json
+  ([`570207d`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/570207df7265a58328be44967e49f21697787358))
+
+### Features
+
+- **factures**: Lien FK avoir->facture d'origine, montants négatifs et callback OCR auto
+  ([`d329cc3`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/d329cc363c7c38def57aefd750c7e8c54300313f))
+
+
 ## v1.3.0 (2026-06-04)
 
 ### Features
