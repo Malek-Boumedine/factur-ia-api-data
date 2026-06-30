@@ -28,7 +28,9 @@ class UtilisateurRole(SQLModel, table=True):
     # clé primaire simple : un utilisateur peut être
     # admin dans l'entreprise A et l'entreprise B
     id: int | None = Field(default=None, primary_key=True)
-    id_utilisateur: int = Field(foreign_key="utilisateur.id", index=True)
+    id_utilisateur: int = Field(
+        foreign_key="utilisateur.id", ondelete="CASCADE", index=True
+    )
     id_role: int = Field(foreign_key="role.id", index=True)
     id_entreprise: int | None = Field(
         default=None, foreign_key="entreprise.id", index=True

@@ -35,7 +35,9 @@ class UtilisateurEntreprise(SQLModel, table=True):
         ),
     )
 
-    id_utilisateur: int = Field(foreign_key="utilisateur.id", primary_key=True)
+    id_utilisateur: int = Field(
+        foreign_key="utilisateur.id", ondelete="CASCADE", primary_key=True
+    )
     id_entreprise: int = Field(foreign_key="entreprise.id", primary_key=True)
 
     est_admin: bool = Field(default=False)

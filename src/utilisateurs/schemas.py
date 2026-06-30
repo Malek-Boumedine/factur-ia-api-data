@@ -19,6 +19,10 @@ class UtilisateurCreate(UtilisateurBase):
     """Schéma pour créer un utilisateur avec son mot de passe en clair."""
 
     password: str = Field(..., min_length=8, description="Mot de passe en clair")
+    id_role: int = Field(..., description="ID du rôle métier rattaché")
+    est_admin: bool = Field(
+        default=False, description="Droit admin au niveau de l'entreprise"
+    )
 
 
 class UtilisateurUpdate(BaseModel):
@@ -42,5 +46,17 @@ class UtilisateurRead(UtilisateurBase):
     date_creation: datetime
     date_modification: datetime
     date_derniere_connexion: datetime | None = None
+    role: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UtilisateurTeamUpdate(UtilisateurUpdate):
+    """
+    Hérite de tous les champs optionnels (nom, prenom, adresse...) de UtilisateurUpdate,
+    et y ajoute les champs de gestion réservés aux administrateurs.
+    """
+
+    password: str | None = Field(default=None, min_length=8)
+    id_role: int | None = Field(default=None)
+    est_admin: bool | None = Field(default=None)
