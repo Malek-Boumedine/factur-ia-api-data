@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -42,6 +44,28 @@ def create_access_token(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
     return str(encoded_jwt)
+
+
+def hash_reset_token(token: str) -> str:
+    """
+    Hash SHA-256 (hex) d'un token de réinitialisation.
+
+    Contrairement aux mots de passe (bcrypt), le token est déjà une valeur
+    aléatoire à haute entropie : SHA-256 suffit et permet une recherche par
+    égalité sur un index unique. On ne stocke jamais le token en clair.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def generate_reset_token() -> tuple[str, str]:
+    """
+    Génère un token de réinitialisation à usage unique.
+
+    Retourne le couple ``(plain_token, token_hash)`` : le clair part dans le
+    lien envoyé par email, seul le hash est persisté en base.
+    """
+    plain_token = secrets.token_urlsafe(32)
+    return plain_token, hash_reset_token(plain_token)
 
 
 if __name__ == "__main__":

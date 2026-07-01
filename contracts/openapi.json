@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "paths": {
     "/auth/token": {
@@ -32,6 +32,90 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Login"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/mot-de-passe-oublie": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Forgot Password",
+        "description": "Déclenche l'envoi d'un lien de réinitialisation de mot de passe.\n\nLa réponse est **toujours identique**, que l'email corresponde à un compte\nou non, afin de ne pas divulguer l'existence d'un utilisateur.",
+        "operationId": "forgot_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MotDePasseOublieRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reinitialiser-mot-de-passe": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Reset Password",
+        "description": "Réinitialise le mot de passe à partir d'un token reçu par email.\n\nLe token doit exister, être non expiré et ne pas avoir déjà servi. En cas\nd'échec, un message générique est renvoyé (pas de détail sur la cause).",
+        "operationId": "reset_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReinitialisationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
@@ -3134,6 +3218,36 @@
         ],
         "title": "LigneOcr"
       },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "MessageResponse",
+        "description": "Réponse neutre générique (ne divulgue aucune information sensible)."
+      },
+      "MotDePasseOublieRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "MotDePasseOublieRequest",
+        "description": "Demande de réinitialisation : uniquement l'email du compte concerné."
+      },
       "OcrWebhookPayload": {
         "properties": {
           "id_document": {
@@ -3262,6 +3376,28 @@
           "total_ttc"
         ],
         "title": "OcrWebhookPayload"
+      },
+      "ReinitialisationRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Token reçu dans le lien de réinitialisation"
+          },
+          "nouveau_mot_de_passe": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Nouveau Mot De Passe",
+            "description": "Nouveau mot de passe en clair"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "nouveau_mot_de_passe"
+        ],
+        "title": "ReinitialisationRequest",
+        "description": "Réinitialisation effective : token reçu par email + nouveau mot de passe.\n\nLe nouveau mot de passe suit la même politique de robustesse que\nl'inscription (`min_length=8`)."
       },
       "RoleRead": {
         "properties": {
