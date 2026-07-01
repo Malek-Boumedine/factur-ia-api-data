@@ -12,6 +12,7 @@ from src.clients.router import router as clients_router
 from src.core.config import settings
 from src.core.rate_limit import limiter
 from src.documents.router import router as documents_router
+from src.entreprises.router import router as entreprises_router
 from src.factures.router import router as factures_router
 from src.utilisateurs.router import router as utilisateurs_router
 
@@ -63,6 +64,7 @@ def get_application() -> FastAPI:
     _app.include_router(catalogue_produits_router)
     _app.include_router(factures_router)
     _app.include_router(documents_router)
+    _app.include_router(entreprises_router)
 
     return _app
 

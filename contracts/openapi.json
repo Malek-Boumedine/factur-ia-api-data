@@ -1646,6 +1646,53 @@
         ]
       }
     },
+    "/entreprises/": {
+      "post": {
+        "tags": [
+          "Entreprises"
+        ],
+        "summary": "Create Entreprise Endpoint",
+        "description": "Crée un premier espace de travail (entreprise) pour l'utilisateur connecté.\n\nAuthentification JWT requise, **sans** header `x-entreprise-id` : l'utilisateur\nn'a pas encore d'entreprise. Il en devient propriétaire (droit admin + rôle\nPROPRIETAIRE) et l'entreprise est souscrite au plan gratuit.",
+        "operationId": "create_entreprise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntrepriseCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -2643,6 +2690,101 @@
         ],
         "title": "EntrepriseAbonnementRead",
         "description": "Détails de la souscription d'une entreprise à un abonnement."
+      },
+      "EntrepriseCreate": {
+        "properties": {
+          "nom_entreprise": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14,
+                "minLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret",
+            "description": "SIRET à 14 chiffres (optionnel)."
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nom_entreprise"
+        ],
+        "title": "EntrepriseCreate",
+        "description": "Données d'onboarding pour créer un premier espace de travail."
+      },
+      "EntrepriseRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_entreprise": {
+            "type": "string",
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret"
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Modification"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_entreprise",
+          "siret",
+          "id_forme_juridique",
+          "date_creation",
+          "date_modification"
+        ],
+        "title": "EntrepriseRead",
+        "description": "Schéma de sortie d'une entreprise."
       },
       "FactureCreate": {
         "properties": {

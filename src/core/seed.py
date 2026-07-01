@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from typing import Any
 
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -16,6 +17,7 @@ import src.relances.models  # noqa: F401
 import src.utilisateurs.models  # noqa: F401
 
 # Imports spécifiques pour le seeding
+from src.abonnements.models import Abonnement
 from src.auth.models import Role
 from src.core.database import async_session_maker
 from src.factures.models import StatutFacture, TauxTva
@@ -45,6 +47,17 @@ ROLES = [
         "libelle": "LECTEUR",
         "description": "Consultant ou invité externe — \
             Lecture seule sur les documents et les clients.",
+    },
+]
+
+ABONNEMENTS = [
+    {
+        "libelle": "GRATUITE",
+        "description": "Plan gratuit par défaut attribué à toute nouvelle "
+        "entreprise lors de l'onboarding.",
+        "tarif": Decimal("0"),
+        "nombre_max_utilisateurs": 1,
+        "nombre_max_factures_mois": 10,
     },
 ]
 
@@ -153,6 +166,9 @@ async def run_seeds() -> None:
     async with async_session_maker() as session:
         print("🌱 Seeding roles...")
         await _seed_table(session, Role, ROLES, "libelle")
+
+        print("🌱 Seeding abonnements...")
+        await _seed_table(session, Abonnement, ABONNEMENTS, "libelle")
 
         print("🌱 Seeding taux_tva...")
         await _seed_table(session, TauxTva, TAUX_TVA, "libelle")

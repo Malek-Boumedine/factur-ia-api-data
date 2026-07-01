@@ -22,10 +22,10 @@ class Utilisateur(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     nom: str = Field(max_length=255)
     prenom: str = Field(max_length=255)
-    adresse: str = Field(max_length=255)
+    adresse: str | None = Field(default=None, max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
-    code_postal: str = Field(max_length=10, index=True)
-    ville: str = Field(max_length=150, index=True)
+    code_postal: str | None = Field(default=None, max_length=10, index=True)
+    ville: str | None = Field(default=None, max_length=150, index=True)
 
     email: str = Field(unique=True, index=True, max_length=255)
     telephone: str | None = Field(default=None, max_length=20)
