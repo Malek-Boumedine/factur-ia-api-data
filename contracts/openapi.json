@@ -228,7 +228,7 @@
           "Ecosystème Client"
         ],
         "summary": "List Clients",
-        "description": "Récupère la liste de tous les clients appartenant à l'entreprise active.",
+        "description": "Récupère les clients de l'entreprise active, avec recherche, filtres\net pagination. La recherche et les filtres s'appliquent toujours à\nl'intérieur du périmètre de l'entreprise (isolation tenant).",
         "operationId": "list_clients_clients__get",
         "security": [
           {
@@ -236,6 +236,69 @@
           }
         ],
         "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur raison sociale, SIRET ou email.",
+              "title": "Search"
+            },
+            "description": "Recherche sur raison sociale, SIRET ou email."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif.",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
           {
             "name": "x-entreprise-id",
             "in": "header",
@@ -254,11 +317,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ClientRead"
-                  },
-                  "title": "Response List Clients Clients  Get"
+                  "$ref": "#/components/schemas/Page_ClientRead_"
                 }
               }
             }
@@ -1107,7 +1166,7 @@
           "Catalogue Produits"
         ],
         "summary": "Read Produits",
-        "description": "Récupère tous les produits du catalogue pour l'entreprise en cours.",
+        "description": "Récupère les produits du catalogue de l'entreprise active, avec recherche,\nfiltres et pagination. La recherche et les filtres s'appliquent toujours à\nl'intérieur du périmètre de l'entreprise (isolation tenant).",
         "operationId": "read_produits_catalogue_produits__get",
         "security": [
           {
@@ -1116,14 +1175,71 @@
         ],
         "parameters": [
           {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur désignation ou référence.",
+              "title": "Search"
+            },
+            "description": "Recherche sur désignation ou référence."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif.",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif."
+          },
+          {
+            "name": "type_produit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TypeProduit"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le type de produit.",
+              "title": "Type Produit"
+            },
+            "description": "Filtre sur le type de produit."
+          },
+          {
             "name": "skip",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
               "default": 0,
               "title": "Skip"
-            }
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
           },
           {
             "name": "limit",
@@ -1131,9 +1247,13 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
               "default": 100,
               "title": "Limit"
-            }
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
           },
           {
             "name": "x-entreprise-id",
@@ -1153,11 +1273,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CatalogueRead"
-                  },
-                  "title": "Response Read Produits Catalogue Produits  Get"
+                  "$ref": "#/components/schemas/Page_CatalogueRead_"
                 }
               }
             }
@@ -3518,6 +3634,68 @@
           "total_ttc"
         ],
         "title": "OcrWebhookPayload"
+      },
+      "Page_CatalogueRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[CatalogueRead]"
+      },
+      "Page_ClientRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[ClientRead]"
       },
       "ReinitialisationRequest": {
         "properties": {
