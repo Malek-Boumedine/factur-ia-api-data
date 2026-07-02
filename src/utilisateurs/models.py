@@ -39,6 +39,12 @@ class Utilisateur(SQLModel, table=True):
     date_derniere_connexion: datetime | None = Field(default=None)
     est_actif: bool = Field(default=True)
 
+    # Administration au niveau plateforme (distinct de l'admin métier
+    # d'entreprise porté par UtilisateurEntreprise.est_admin).
+    admin_plateforme: bool = Field(default=False, index=True)
+    # Compte racine protégé : ni révocable ni supprimable par personne.
+    compte_protege: bool = Field(default=False)
+
     # relations
     # rôles globaux sur la plateforme
     roles: list["Role"] = Relationship(

@@ -98,6 +98,25 @@ class RequirePermission:
         return current_user
 
 
+async def require_admin_plateforme(
+    current_user: Annotated[Utilisateur, Depends(get_current_user)],
+) -> Utilisateur:
+    """
+    Dépendance de sécurité au niveau plateforme.
+
+    Autorise uniquement les administrateurs de la plateforme (flag
+    `admin_plateforme` sur l'utilisateur du JWT). Contrairement à
+    `verify_tenant_access`, elle est indépendante du header `x-entreprise-id` :
+    l'admin plateforme agit au niveau global, hors périmètre d'une entreprise.
+    """
+    if not current_user.admin_plateforme:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux administrateurs de la plateforme.",
+        )
+    return current_user
+
+
 # isolation de l'entreprise (tenant)
 async def verify_tenant_access(
     x_entreprise_id: Annotated[

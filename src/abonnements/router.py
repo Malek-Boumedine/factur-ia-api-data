@@ -11,7 +11,7 @@ from src.abonnements.schemas import (
     AbonnementUpdate,
     EntrepriseAbonnementRead,
 )
-from src.auth.dependencies import RequirePermission, get_current_user
+from src.auth.dependencies import get_current_user, require_admin_plateforme
 from src.core.database import get_session
 from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
@@ -60,7 +60,7 @@ async def get_my_subscriptions(
 @router.post("/", response_model=AbonnementRead, status_code=status.HTTP_201_CREATED)
 async def create_plan(
     plan_in: AbonnementCreate,
-    _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
+    _: Annotated[Utilisateur, Depends(require_admin_plateforme)],
     session: SessionDep,
 ) -> Any:
     """
@@ -78,7 +78,7 @@ async def create_plan(
 async def update_plan(
     abonnement_id: int,
     plan_in: AbonnementUpdate,
-    _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
+    _: Annotated[Utilisateur, Depends(require_admin_plateforme)],
     session: SessionDep,
 ) -> Any:
     """
@@ -102,7 +102,7 @@ async def update_plan(
 @router.delete("/{abonnement_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_plan(
     abonnement_id: int,
-    _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
+    _: Annotated[Utilisateur, Depends(require_admin_plateforme)],
     session: SessionDep,
 ) -> None:
     """

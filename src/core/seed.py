@@ -126,16 +126,6 @@ TYPES_NOTIFICATION = [
 ]
 
 
-UTILISATEUR_ADMIN = {
-    "nom": "Admin",
-    "prenom": "Système",
-    "email": "admin@example.com",
-    "mot_de_passe_hash": "<bcrypt_hash>",
-    "est_actif": True,
-    "est_admin": True,
-}
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -153,6 +143,58 @@ async def _seed_table(
         )
         if existing.first() is None:
             session.add(model(**data))
+
+    await session.commit()
+
+
+async def _seed_admin_plateforme(session: AsyncSession) -> None:
+    """
+    Seed idempotent du premier administrateur de plateforme (compte racine).
+
+    Les identifiants proviennent des variables d'environnement
+    (`PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD`) — jamais en dur. Si
+    l'une des deux est absente, le seed est ignoré sans bloquer le démarrage.
+
+    Le compte est créé avec `admin_plateforme=True` et `compte_protege=True`
+    (non-supprimable, non-révocable). Si l'email existe déjà, on garantit
+    seulement le statut admin plateforme sans toucher au mot de passe.
+    """
+    from sqlmodel import select
+
+    from src.core.config import settings
+    from src.core.security import get_password_hash
+    from src.utilisateurs.models import Utilisateur
+
+    email = settings.PLATFORM_ADMIN_EMAIL
+    password = settings.PLATFORM_ADMIN_PASSWORD
+    if not email or not password:
+        print(
+            "⚠️  Seed admin plateforme ignoré "
+            "(PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD non définis)."
+        )
+        return
+
+    existing = (
+        await session.exec(select(Utilisateur).where(Utilisateur.email == email))
+    ).first()
+
+    if existing is None:
+        session.add(
+            Utilisateur(
+                nom=settings.PLATFORM_ADMIN_NOM,
+                prenom=settings.PLATFORM_ADMIN_PRENOM,
+                email=email,
+                hash_mot_de_passe=get_password_hash(password),
+                est_actif=True,
+                admin_plateforme=True,
+                compte_protege=True,
+            )
+        )
+    elif not existing.admin_plateforme or not existing.compte_protege:
+        # on garantit le statut sans réécrire le mot de passe.
+        existing.admin_plateforme = True
+        existing.compte_protege = True
+        session.add(existing)
 
     await session.commit()
 
@@ -181,6 +223,9 @@ async def run_seeds() -> None:
 
         print("🌱 Seeding type_notification...")
         await _seed_table(session, TypeNotification, TYPES_NOTIFICATION, "libelle")
+
+        print("🌱 Seeding admin plateforme...")
+        await _seed_admin_plateforme(session)
 
         print("✅ Seeding terminé.")
 

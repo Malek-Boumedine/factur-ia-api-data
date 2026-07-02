@@ -214,6 +214,13 @@ async def delete_team_member(
     if not db_user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable.")
 
+    # Le compte racine protégé n'est supprimable par personne.
+    if db_user.compte_protege:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ce compte est protégé et ne peut pas être supprimé.",
+        )
+
     # 2. Comme on a mis ondelete="CASCADE" dans les modèles,
     # supprimer l'utilisateur supprimera automatiquement les lignes
     # dans UtilisateurRole et UtilisateurEntreprise.

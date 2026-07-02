@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "paths": {
     "/auth/token": {
@@ -1102,6 +1102,133 @@
         }
       }
     },
+    "/admins-plateforme/": {
+      "get": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "List Admins",
+        "description": "Liste les administrateurs de la plateforme.",
+        "operationId": "list_admins_admins_plateforme__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminPlateformeRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Admins Admins Plateforme  Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/admins-plateforme/{utilisateur_id}/promouvoir": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Promote Admin",
+        "description": "Promeut un utilisateur au rang d'administrateur de plateforme.\nNe modifie que le statut plateforme, jamais les rôles métier.",
+        "operationId": "promote_admin_admins_plateforme__utilisateur_id__promouvoir_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPlateformeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admins-plateforme/{utilisateur_id}/revoquer": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Revoke Admin",
+        "description": "Révoque le statut d'administrateur de plateforme d'un utilisateur.\nLe compte reste inchangé par ailleurs (rôles, entreprises, existence).",
+        "operationId": "revoke_admin_admins_plateforme__utilisateur_id__revoquer_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPlateformeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/catalogue-produits/": {
       "post": {
         "tags": [
@@ -2027,6 +2154,57 @@
         "type": "object",
         "title": "AbonnementUpdate",
         "description": "Schéma pour la modification d'un plan (Admin uniquement)."
+      },
+      "AdminPlateformeRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom": {
+            "type": "string",
+            "title": "Nom"
+          },
+          "prenom": {
+            "type": "string",
+            "title": "Prenom"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif"
+          },
+          "admin_plateforme": {
+            "type": "boolean",
+            "title": "Admin Plateforme"
+          },
+          "compte_protege": {
+            "type": "boolean",
+            "title": "Compte Protege"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom",
+          "prenom",
+          "email",
+          "est_actif",
+          "admin_plateforme",
+          "compte_protege",
+          "date_creation"
+        ],
+        "title": "AdminPlateformeRead",
+        "description": "Schéma de lecture d'un administrateur de plateforme.\n\nVolontairement distinct de `UtilisateurRead` : ne contient que les champs\nglobaux (pas de `role`/`est_admin`, qui dépendent d'une entreprise)."
       },
       "Body_login": {
         "properties": {
