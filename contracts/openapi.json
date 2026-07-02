@@ -1284,6 +1284,255 @@
         }
       }
     },
+    "/taux-tva/": {
+      "get": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "List Taux",
+        "description": "Liste les taux de TVA de la plateforme (référentiel global).\nAccessible à tout utilisateur authentifié, sans périmètre d'entreprise.",
+        "operationId": "list_taux_taux_tva__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif (optionnel).",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif (optionnel)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TauxTvaRead"
+                  },
+                  "title": "Response List Taux Taux Tva  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Create Taux",
+        "description": "Crée un nouveau taux de TVA. Réservé aux administrateurs de la\nplateforme. Renvoie une 409 si la valeur du taux existe déjà.",
+        "operationId": "create_taux_taux_tva__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TauxTvaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TauxTvaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/taux-tva/{taux_tva_id}": {
+      "get": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Get Taux",
+        "description": "Récupère le détail d'un taux de TVA.",
+        "operationId": "get_taux_taux_tva__taux_tva_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taux_tva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Taux Tva Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TauxTvaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Update Taux",
+        "description": "Modifie partiellement un taux de TVA (dont réactivation via\n`est_actif=true`). Réservé aux administrateurs de la plateforme.",
+        "operationId": "update_taux_taux_tva__taux_tva_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taux_tva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Taux Tva Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TauxTvaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TauxTvaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Deactivate Taux",
+        "description": "Désactive un taux de TVA (soft delete, jamais de suppression physique :\ndes factures inaltérables le référencent). Réservé aux administrateurs\nde la plateforme.",
+        "operationId": "deactivate_taux_taux_tva__taux_tva_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taux_tva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Taux Tva Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/catalogue-produits/": {
       "post": {
         "tags": [
@@ -4135,6 +4384,163 @@
           "annulé"
         ],
         "title": "StatutSouscription"
+      },
+      "TauxTvaCreate": {
+        "properties": {
+          "taux": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Taux",
+            "description": "Valeur du taux en pourcentage (ex : 20.00). Unique."
+          },
+          "libelle": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Libelle",
+            "description": "Libellé affiché (ex : Taux normal)"
+          },
+          "code_comptable": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Comptable",
+            "description": "Code comptable associé (optionnel)"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si le taux est proposé pour de nouvelles saisies",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "taux",
+          "libelle"
+        ],
+        "title": "TauxTvaCreate",
+        "description": "Schéma de création d'un taux de TVA (admin plateforme uniquement)."
+      },
+      "TauxTvaRead": {
+        "properties": {
+          "taux": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Taux",
+            "description": "Valeur du taux en pourcentage (ex : 20.00). Unique."
+          },
+          "libelle": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Libelle",
+            "description": "Libellé affiché (ex : Taux normal)"
+          },
+          "code_comptable": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Comptable",
+            "description": "Code comptable associé (optionnel)"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si le taux est proposé pour de nouvelles saisies",
+            "default": true
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "taux",
+          "libelle",
+          "id"
+        ],
+        "title": "TauxTvaRead",
+        "description": "Schéma de lecture d'un taux de TVA."
+      },
+      "TauxTvaUpdate": {
+        "properties": {
+          "taux": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taux"
+          },
+          "libelle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle"
+          },
+          "code_comptable": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Comptable"
+          },
+          "est_actif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Actif"
+          }
+        },
+        "type": "object",
+        "title": "TauxTvaUpdate",
+        "description": "Schéma de mise à jour partielle d'un taux de TVA (PATCH).\nTous les champs sont optionnels ; `est_actif=true` permet de réactiver\nun taux désactivé."
       },
       "TypeFacture": {
         "type": "string",
