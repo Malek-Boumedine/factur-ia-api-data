@@ -1,0 +1,4491 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Factur-IA API",
+    "version": "1.4.0"
+  },
+  "paths": {
+    "/auth/token": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Login For Access Token",
+        "description": "Authentifie un utilisateur et retourne un token JWT.\n\nL'authentification s'effectue au niveau global de l'utilisateur (email).\nUne fois authentifié, l'utilisateur devra fournir un header 'x-entreprise-id'\nsur les routes métiers pour interagir avec les données de ses entreprises.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Login"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/mot-de-passe-oublie": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Forgot Password",
+        "description": "Déclenche l'envoi d'un lien de réinitialisation de mot de passe.\n\nLa réponse est **toujours identique**, que l'email corresponde à un compte\nou non, afin de ne pas divulguer l'existence d'un utilisateur.",
+        "operationId": "forgot_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MotDePasseOublieRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reinitialiser-mot-de-passe": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Reset Password",
+        "description": "Réinitialise le mot de passe à partir d'un token reçu par email.\n\nLe token doit exister, être non expiré et ne pas avoir déjà servi. En cas\nd'échec, un message générique est renvoyé (pas de détail sur la cause).",
+        "operationId": "reset_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReinitialisationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/roles": {
+      "get": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "List Roles",
+        "description": "Retourne la liste des rôles disponibles.\nAccessible à tout utilisateur authentifié.",
+        "operationId": "list_roles_auth_roles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RoleRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Roles Auth Roles Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/clients/": {
+      "post": {
+        "tags": [
+          "Ecosystème Client"
+        ],
+        "summary": "Create Client",
+        "description": "Crée un nouveau client rattaché à l'entreprise (espace de travail) active.\nL'ID du créateur et l'ID de l'entreprise sont renseignés automatiquement.",
+        "operationId": "create_client_clients__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Ecosystème Client"
+        ],
+        "summary": "List Clients",
+        "description": "Récupère les clients de l'entreprise active, avec recherche, filtres\net pagination. La recherche et les filtres s'appliquent toujours à\nl'intérieur du périmètre de l'entreprise (isolation tenant).",
+        "operationId": "list_clients_clients__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur raison sociale, SIRET ou email.",
+              "title": "Search"
+            },
+            "description": "Recherche sur raison sociale, SIRET ou email."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif.",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ClientRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clients/{client_id}": {
+      "get": {
+        "tags": [
+          "Ecosystème Client"
+        ],
+        "summary": "Get Client",
+        "description": "Récupère les détails d'un client spécifique en s'assurant qu'il\nappartient bien à l'entreprise active (isolation des données).",
+        "operationId": "get_client_clients__client_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Client Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Ecosystème Client"
+        ],
+        "summary": "Update Client",
+        "description": "Met à jour partiellement les informations d'un client.\nMet à jour automatiquement l'ID du modificateur pour l'audit.",
+        "operationId": "update_client_clients__client_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Client Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Ecosystème Client"
+        ],
+        "summary": "Delete Client",
+        "description": "Supprime définitivement un client appartenant à l'entreprise active.",
+        "operationId": "delete_client_clients__client_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "client_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Client Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/clients/recherche-sirene/{identifiant}": {
+      "get": {
+        "tags": [
+          "Ecosystème Client"
+        ],
+        "summary": "Rechercher une entreprise via son SIREN ou SIRET",
+        "description": "Interroge l'API gouvernementale pour\npré-remplir les données d'un client.\nAccepte un SIREN (9 chiffres) ou un SIRET (14 chiffres).",
+        "operationId": "search_company_by_identifier_clients_recherche_sirene__identifiant__get",
+        "parameters": [
+          {
+            "name": "identifiant",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Identifiant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchSireneSiretResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/abonnements/": {
+      "get": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "List Plans",
+        "description": "Liste tous les plans d'abonnement disponibles sur la plateforme.\nAccessible par tout utilisateur authentifié.",
+        "operationId": "list_plans_abonnements__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AbonnementRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Plans Abonnements  Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "Create Plan",
+        "description": "Crée un nouveau plan d'abonnement.\nRéservé aux administrateurs de la plateforme.",
+        "operationId": "create_plan_abonnements__post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbonnementCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbonnementRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/abonnements/me": {
+      "get": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "Get My Subscriptions",
+        "description": "Récupère les abonnements des entreprises (espaces de travail)\nauxquelles l'utilisateur actuel est rattaché.",
+        "operationId": "get_my_subscriptions_abonnements_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EntrepriseAbonnementRead"
+                  },
+                  "type": "array",
+                  "title": "Response Get My Subscriptions Abonnements Me Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/abonnements/{abonnement_id}": {
+      "patch": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "Update Plan",
+        "description": "Modifie les caractéristiques d'un plan d'abonnement.\nRéservé aux administrateurs de la plateforme.",
+        "operationId": "update_plan_abonnements__abonnement_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "abonnement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Abonnement Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbonnementUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbonnementRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "Delete Plan",
+        "description": "Supprime un plan d'abonnement.\nRéservé aux administrateurs de la plateforme.",
+        "operationId": "delete_plan_abonnements__abonnement_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "abonnement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Abonnement Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/utilisateurs/me": {
+      "get": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Get My Profile",
+        "description": "Récupère le profil de l'utilisateur actuellement connecté.",
+        "operationId": "get_my_profile_utilisateurs_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Update My Profile",
+        "description": "Permet à l'utilisateur de modifier ses propres informations personnelles.",
+        "operationId": "update_my_profile_utilisateurs_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UtilisateurUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/utilisateurs/": {
+      "get": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "List Team Members",
+        "description": "Liste tous les utilisateurs rattachés à l'entreprise active (l'équipe).",
+        "operationId": "list_team_members_utilisateurs__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UtilisateurRead"
+                  },
+                  "title": "Response List Team Members Utilisateurs  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Create Team Member",
+        "description": "Crée un nouvel utilisateur et le rattache automatiquement à l'entreprise actuelle.",
+        "operationId": "create_team_member_utilisateurs__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UtilisateurCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/utilisateurs/inscription": {
+      "post": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Register Public User",
+        "description": "Inscription publique d'un nouvel utilisateur.\nCrée un compte utilisateur \"nu\", sans rattachement initial à une entreprise.",
+        "operationId": "register_public_user_utilisateurs_inscription_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UtilisateurCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/utilisateurs/{user_id}": {
+      "delete": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Delete Team Member",
+        "operationId": "delete_team_member_utilisateurs__user_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Update Team Member",
+        "description": "Modifie les informations d'un\ncollaborateur (incluant ses rôles et accès admin).",
+        "operationId": "update_team_member_utilisateurs__user_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UtilisateurTeamUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalogue-produits/": {
+      "post": {
+        "tags": [
+          "Catalogue Produits"
+        ],
+        "summary": "Create Produit",
+        "description": "Ajoute un nouveau produit ou service au catalogue.\nL'ID de l'entreprise et du créateur sont injectés automatiquement.",
+        "operationId": "create_produit_catalogue_produits__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogueCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Catalogue Produits"
+        ],
+        "summary": "Read Produits",
+        "description": "Récupère les produits du catalogue de l'entreprise active, avec recherche,\nfiltres et pagination. La recherche et les filtres s'appliquent toujours à\nl'intérieur du périmètre de l'entreprise (isolation tenant).",
+        "operationId": "read_produits_catalogue_produits__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur désignation ou référence.",
+              "title": "Search"
+            },
+            "description": "Recherche sur désignation ou référence."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif.",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif."
+          },
+          {
+            "name": "type_produit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TypeProduit"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le type de produit.",
+              "title": "Type Produit"
+            },
+            "description": "Filtre sur le type de produit."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CatalogueRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalogue-produits/{produit_id}": {
+      "get": {
+        "tags": [
+          "Catalogue Produits"
+        ],
+        "summary": "Read Produit",
+        "description": "Récupère un produit spécifique par son ID.",
+        "operationId": "read_produit_catalogue_produits__produit_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "produit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Produit Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Catalogue Produits"
+        ],
+        "summary": "Update Produit",
+        "description": "Met à jour partiellement un produit.",
+        "operationId": "update_produit_catalogue_produits__produit_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "produit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Produit Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogueUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Catalogue Produits"
+        ],
+        "summary": "Delete Produit",
+        "description": "Désactive un produit (Soft Delete).",
+        "operationId": "delete_produit_catalogue_produits__produit_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "produit_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Produit Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Delete Produit Catalogue Produits  Produit Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/factures/": {
+      "post": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Create Brouillon Endpoint",
+        "operationId": "create_brouillon_endpoint_factures__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactureCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactureReadWithLignes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/factures/{facture_id}/valider": {
+      "post": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Valider Brouillon Endpoint",
+        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).",
+        "operationId": "valider_brouillon_endpoint_factures__facture_id__valider_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactureReadWithLignes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/factures/{facture_id}/avoir": {
+      "post": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Generer Avoir Endpoint",
+        "description": "Génère un avoir (en brouillon) à partir d'une facture validée.",
+        "operationId": "generer_avoir_endpoint_factures__facture_id__avoir_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactureReadWithLignes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/upload": {
+      "post": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Upload Document",
+        "description": "Reçoit un fichier (PDF ou Image), le valide, le stocke et crée une entrée en base.",
+        "operationId": "upload_document_documents_upload_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document_documents_upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Upload Document Documents Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/webhook/ocr": {
+      "post": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Webhook Ocr Result",
+        "description": "Réceptionne les résultats de l'IA.\n\nGénère automatiquement un brouillon de facture à partir des données\nextraites et lie l'extraction à ce brouillon. Si les données sont\ninexploitables, le document passe en erreur et l'extraction en échec.",
+        "operationId": "webhook_ocr_result_documents_webhook_ocr_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OcrWebhookPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Webhook Ocr Result Documents Webhook Ocr Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/entreprises/": {
+      "post": {
+        "tags": [
+          "Entreprises"
+        ],
+        "summary": "Create Entreprise Endpoint",
+        "description": "Crée un premier espace de travail (entreprise) pour l'utilisateur connecté.\n\nAuthentification JWT requise, **sans** header `x-entreprise-id` : l'utilisateur\nn'a pas encore d'entreprise. Il en devient propriétaire (droit admin + rôle\nPROPRIETAIRE) et l'entreprise est souscrite au plan gratuit.",
+        "operationId": "create_entreprise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntrepriseCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Infrastructure"
+        ],
+        "summary": "Health Check",
+        "description": "Endpoint technique pour vérifier l'état de l'API.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Infrastructure"
+        ],
+        "summary": "Root",
+        "description": "Accueil de l'API.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Root  Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AbonnementCreate": {
+        "properties": {
+          "libelle": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Libelle",
+            "description": "Nom du plan (ex: Pro, Business)"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tarif": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Tarif",
+            "default": "0"
+          },
+          "nombre_max_utilisateurs": {
+            "type": "integer",
+            "title": "Nombre Max Utilisateurs",
+            "default": 1
+          },
+          "nombre_max_factures_mois": {
+            "type": "integer",
+            "title": "Nombre Max Factures Mois",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "libelle"
+        ],
+        "title": "AbonnementCreate",
+        "description": "Schéma pour la création d'un nouveau plan (Admin uniquement)."
+      },
+      "AbonnementRead": {
+        "properties": {
+          "libelle": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Libelle",
+            "description": "Nom du plan (ex: Pro, Business)"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tarif": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,8}|(?=[\\d.]{1,11}0*$)\\d{0,8}\\.\\d{0,2}0*$)",
+            "title": "Tarif",
+            "default": "0"
+          },
+          "nombre_max_utilisateurs": {
+            "type": "integer",
+            "title": "Nombre Max Utilisateurs",
+            "default": 1
+          },
+          "nombre_max_factures_mois": {
+            "type": "integer",
+            "title": "Nombre Max Factures Mois",
+            "default": 10
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "libelle",
+          "id"
+        ],
+        "title": "AbonnementRead",
+        "description": "Schéma pour la lecture d'un plan d'abonnement."
+      },
+      "AbonnementUpdate": {
+        "properties": {
+          "libelle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "tarif": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarif"
+          },
+          "nombre_max_utilisateurs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Max Utilisateurs"
+          },
+          "nombre_max_factures_mois": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Max Factures Mois"
+          }
+        },
+        "type": "object",
+        "title": "AbonnementUpdate",
+        "description": "Schéma pour la modification d'un plan (Admin uniquement)."
+      },
+      "Body_login": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login"
+      },
+      "Body_upload_document_documents_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_document_documents_upload_post"
+      },
+      "CatalogueCreate": {
+        "properties": {
+          "type_produit": {
+            "$ref": "#/components/schemas/TypeProduit",
+            "description": "Type d'élément (produit, prestation, service)",
+            "default": "produit"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference",
+            "description": "Référence interne ou SKU du produit"
+          },
+          "designation": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Designation",
+            "description": "Nom ou description courte affichée sur la facture"
+          },
+          "prix_unitaire_ht": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Prix Unitaire Ht",
+            "description": "Prix unitaire hors taxes (doit être positif ou nul)"
+          },
+          "unite": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unite",
+            "description": "Unité de mesure (ex: heure, jour, pièce, kg)",
+            "default": "unité"
+          },
+          "id_taux_tva": {
+            "type": "integer",
+            "title": "Id Taux Tva",
+            "description": "Clé étrangère vers la table des taux de TVA"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si le produit est disponible à la vente",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "designation",
+          "prix_unitaire_ht",
+          "id_taux_tva"
+        ],
+        "title": "CatalogueCreate",
+        "description": "Schéma pour l'ajout d'un nouveau produit au catalogue.\nLes champs id_entreprise et id_utilisateur sont exclus ici car ils sont\ninjectés de manière sécurisée par le backend via le header et le token."
+      },
+      "CatalogueRead": {
+        "properties": {
+          "type_produit": {
+            "$ref": "#/components/schemas/TypeProduit",
+            "description": "Type d'élément (produit, prestation, service)",
+            "default": "produit"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference",
+            "description": "Référence interne ou SKU du produit"
+          },
+          "designation": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Designation",
+            "description": "Nom ou description courte affichée sur la facture"
+          },
+          "prix_unitaire_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Prix Unitaire Ht",
+            "description": "Prix unitaire hors taxes (doit être positif ou nul)"
+          },
+          "unite": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unite",
+            "description": "Unité de mesure (ex: heure, jour, pièce, kg)",
+            "default": "unité"
+          },
+          "id_taux_tva": {
+            "type": "integer",
+            "title": "Id Taux Tva",
+            "description": "Clé étrangère vers la table des taux de TVA"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si le produit est disponible à la vente",
+            "default": true
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_entreprise": {
+            "type": "integer",
+            "title": "Id Entreprise"
+          },
+          "id_utilisateur": {
+            "type": "integer",
+            "title": "Id Utilisateur"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Modification"
+          }
+        },
+        "type": "object",
+        "required": [
+          "designation",
+          "prix_unitaire_ht",
+          "id_taux_tva",
+          "id",
+          "id_entreprise",
+          "id_utilisateur",
+          "date_creation",
+          "date_modification"
+        ],
+        "title": "CatalogueRead",
+        "description": "Schéma pour renvoyer les données du produit au front-end.\nInclut les champs techniques générés par la base de données."
+      },
+      "CatalogueUpdate": {
+        "properties": {
+          "type_produit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypeProduit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "designation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Designation"
+          },
+          "prix_unitaire_ht": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prix Unitaire Ht"
+          },
+          "unite": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unite"
+          },
+          "id_taux_tva": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Taux Tva"
+          },
+          "est_actif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Actif"
+          }
+        },
+        "type": "object",
+        "title": "CatalogueUpdate",
+        "description": "Schéma pour la mise à jour partielle d'un produit (PATCH).\nTous les champs sont optionnels pour permettre\nde ne modifier qu'une ou plusieurs valeurs."
+      },
+      "ClientCreate": {
+        "properties": {
+          "raison_sociale": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Raison Sociale",
+            "description": "Nom ou raison sociale de l'entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret",
+            "description": "Numéro SIRET à 14 chiffres"
+          },
+          "numero_tva": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Tva",
+            "description": "Numéro de TVA intracommunautaire"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Code Postal"
+          },
+          "ville": {
+            "type": "string",
+            "maxLength": 150,
+            "title": "Ville"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "raison_sociale",
+          "code_postal",
+          "ville"
+        ],
+        "title": "ClientCreate",
+        "description": "Schéma pour la création d'un nouveau client."
+      },
+      "ClientRead": {
+        "properties": {
+          "raison_sociale": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Raison Sociale",
+            "description": "Nom ou raison sociale de l'entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret",
+            "description": "Numéro SIRET à 14 chiffres"
+          },
+          "numero_tva": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Tva",
+            "description": "Numéro de TVA intracommunautaire"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "type": "string",
+            "maxLength": 10,
+            "title": "Code Postal"
+          },
+          "ville": {
+            "type": "string",
+            "maxLength": 150,
+            "title": "Ville"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "default": true
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_entreprise": {
+            "type": "integer",
+            "title": "Id Entreprise"
+          },
+          "id_createur": {
+            "type": "integer",
+            "title": "Id Createur"
+          },
+          "id_modificateur": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Modificateur"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Modification"
+          },
+          "date_desactivation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Desactivation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "raison_sociale",
+          "code_postal",
+          "ville",
+          "id",
+          "id_entreprise",
+          "id_createur",
+          "date_creation",
+          "date_modification"
+        ],
+        "title": "ClientRead",
+        "description": "Schéma pour renvoyer les données du client au front-end."
+      },
+      "ClientUpdate": {
+        "properties": {
+          "raison_sociale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raison Sociale"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret"
+          },
+          "numero_tva": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Tva"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Actif"
+          }
+        },
+        "type": "object",
+        "title": "ClientUpdate",
+        "description": "Schéma pour la mise à jour partielle d'un client (PATCH)."
+      },
+      "EntrepriseAbonnementRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_entreprise": {
+            "type": "integer",
+            "title": "Id Entreprise"
+          },
+          "id_abonnement": {
+            "type": "integer",
+            "title": "Id Abonnement"
+          },
+          "date_debut": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Debut"
+          },
+          "date_fin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Fin"
+          },
+          "statut": {
+            "$ref": "#/components/schemas/StatutSouscription"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "id_entreprise",
+          "id_abonnement",
+          "date_debut",
+          "date_fin",
+          "statut",
+          "date_creation"
+        ],
+        "title": "EntrepriseAbonnementRead",
+        "description": "Détails de la souscription d'une entreprise à un abonnement."
+      },
+      "EntrepriseCreate": {
+        "properties": {
+          "nom_entreprise": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14,
+                "minLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret",
+            "description": "SIRET à 14 chiffres (optionnel)."
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nom_entreprise"
+        ],
+        "title": "EntrepriseCreate",
+        "description": "Données d'onboarding pour créer un premier espace de travail."
+      },
+      "EntrepriseRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_entreprise": {
+            "type": "string",
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret"
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Modification"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_entreprise",
+          "siret",
+          "id_forme_juridique",
+          "date_creation",
+          "date_modification"
+        ],
+        "title": "EntrepriseRead",
+        "description": "Schéma de sortie d'une entreprise."
+      },
+      "FactureCreate": {
+        "properties": {
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client",
+            "description": "Client destinataire de la facture"
+          },
+          "id_document": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Document",
+            "description": "Document source si issue d'une extraction OCR"
+          },
+          "date_emission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance",
+            "description": "Date limite de paiement"
+          },
+          "devise": {
+            "type": "string",
+            "maxLength": 3,
+            "title": "Devise",
+            "default": "EUR"
+          },
+          "type_facture": {
+            "$ref": "#/components/schemas/TypeFacture",
+            "default": "facture"
+          },
+          "mode_paiement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Paiement"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 34
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "reference_commande": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Commande"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Notes internes ou mentions spécifiques"
+          },
+          "lignes": {
+            "items": {
+              "$ref": "#/components/schemas/FactureLigneCreate"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lignes",
+            "description": "Liste des articles (au moins 1 requis)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lignes"
+        ],
+        "title": "FactureCreate",
+        "description": "Schéma pour la création initiale d'un brouillon de facture.\nLes totaux et le numéro de facture seront générés par le système."
+      },
+      "FactureLigneCreate": {
+        "properties": {
+          "designation": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Designation",
+            "description": "Désignation du produit ou service"
+          },
+          "quantite": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,7}|(?=[\\d.]{1,11}0*$)\\d{0,7}\\.\\d{0,3}0*$)"
+              }
+            ],
+            "title": "Quantite"
+          },
+          "unite": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unite",
+            "description": "Unité de mesure (ex: heure, kg, pièce)"
+          },
+          "prix_unitaire_ht": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,10}|(?=[\\d.]{1,13}0*$)\\d{0,10}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Prix Unitaire Ht"
+          },
+          "id_taux_tva": {
+            "type": "integer",
+            "title": "Id Taux Tva",
+            "description": "ID du taux de TVA applicable"
+          },
+          "ordre": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordre",
+            "description": "Ordre d'affichage (calculé automatiquement si omis)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "designation",
+          "quantite",
+          "prix_unitaire_ht",
+          "id_taux_tva"
+        ],
+        "title": "FactureLigneCreate",
+        "description": "Schéma pour l'ajout d'une ligne lors\nde la création ou modification d'une facture."
+      },
+      "FactureLigneRead": {
+        "properties": {
+          "designation": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Designation",
+            "description": "Désignation du produit ou service"
+          },
+          "quantite": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,7}|(?=[\\d.]{1,11}0*$)\\d{0,7}\\.\\d{0,3}0*$)",
+            "title": "Quantite"
+          },
+          "unite": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unite",
+            "description": "Unité de mesure (ex: heure, kg, pièce)"
+          },
+          "prix_unitaire_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,10}|(?=[\\d.]{1,13}0*$)\\d{0,10}\\.\\d{0,2}0*$)",
+            "title": "Prix Unitaire Ht"
+          },
+          "id_taux_tva": {
+            "type": "integer",
+            "title": "Id Taux Tva",
+            "description": "ID du taux de TVA applicable"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_facture": {
+            "type": "integer",
+            "title": "Id Facture"
+          },
+          "ordre": {
+            "type": "integer",
+            "title": "Ordre"
+          },
+          "montant_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant Ht"
+          },
+          "montant_tva": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant Tva"
+          },
+          "montant_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant Ttc"
+          }
+        },
+        "type": "object",
+        "required": [
+          "designation",
+          "quantite",
+          "prix_unitaire_ht",
+          "id_taux_tva",
+          "id",
+          "id_facture",
+          "ordre",
+          "montant_ht",
+          "montant_tva",
+          "montant_ttc"
+        ],
+        "title": "FactureLigneRead",
+        "description": "Schéma pour la lecture d'une ligne\nde facture avec ses montants calculés."
+      },
+      "FactureReadWithLignes": {
+        "properties": {
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client",
+            "description": "Client destinataire de la facture"
+          },
+          "id_document": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Document",
+            "description": "Document source si issue d'une extraction OCR"
+          },
+          "date_emission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance",
+            "description": "Date limite de paiement"
+          },
+          "devise": {
+            "type": "string",
+            "maxLength": 3,
+            "title": "Devise",
+            "default": "EUR"
+          },
+          "type_facture": {
+            "$ref": "#/components/schemas/TypeFacture",
+            "default": "facture"
+          },
+          "mode_paiement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Paiement"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 34
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "reference_commande": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Commande"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Notes internes ou mentions spécifiques"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_entreprise": {
+            "type": "integer",
+            "title": "Id Entreprise"
+          },
+          "id_createur": {
+            "type": "integer",
+            "title": "Id Createur"
+          },
+          "numero_facture": {
+            "type": "string",
+            "title": "Numero Facture"
+          },
+          "id_statut": {
+            "type": "integer",
+            "title": "Id Statut"
+          },
+          "id_facture_origine": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Facture Origine",
+            "description": "Facture d'origine si ce document est un avoir"
+          },
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
+          "snapshot_client": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Client"
+          },
+          "total_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ht"
+          },
+          "total_tva": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Tva"
+          },
+          "total_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ttc"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Modification"
+          },
+          "lignes": {
+            "items": {
+              "$ref": "#/components/schemas/FactureLigneRead"
+            },
+            "type": "array",
+            "title": "Lignes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "id_entreprise",
+          "id_createur",
+          "numero_facture",
+          "id_statut",
+          "total_ht",
+          "total_tva",
+          "total_ttc",
+          "date_creation"
+        ],
+        "title": "FactureReadWithLignes",
+        "description": "Schéma détaillé d'une facture incluant toutes ses lignes.\nIdéal pour l'affichage de la page de détail d'une facture spécifique."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LigneOcr": {
+        "properties": {
+          "designation": {
+            "type": "string",
+            "title": "Designation"
+          },
+          "quantite": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Quantite",
+            "default": "1.0"
+          },
+          "prix_unitaire_ht": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Prix Unitaire Ht"
+          },
+          "taux_tva": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Taux Tva"
+          }
+        },
+        "type": "object",
+        "required": [
+          "designation",
+          "prix_unitaire_ht",
+          "taux_tva"
+        ],
+        "title": "LigneOcr"
+      },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "MessageResponse",
+        "description": "Réponse neutre générique (ne divulgue aucune information sensible)."
+      },
+      "MotDePasseOublieRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "MotDePasseOublieRequest",
+        "description": "Demande de réinitialisation : uniquement l'email du compte concerné."
+      },
+      "OcrWebhookPayload": {
+        "properties": {
+          "id_document": {
+            "type": "integer",
+            "title": "Id Document"
+          },
+          "score_confiance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Score Confiance"
+          },
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
+          "numero_facture": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Facture"
+          },
+          "date_emission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Emission"
+          },
+          "total_ht": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Total Ht"
+          },
+          "total_tva": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Total Tva"
+          },
+          "total_ttc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Total Ttc"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "lignes": {
+            "items": {
+              "$ref": "#/components/schemas/LigneOcr"
+            },
+            "type": "array",
+            "title": "Lignes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_document",
+          "score_confiance",
+          "total_ht",
+          "total_tva",
+          "total_ttc"
+        ],
+        "title": "OcrWebhookPayload"
+      },
+      "Page_CatalogueRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[CatalogueRead]"
+      },
+      "Page_ClientRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[ClientRead]"
+      },
+      "ReinitialisationRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Token reçu dans le lien de réinitialisation"
+          },
+          "nouveau_mot_de_passe": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Nouveau Mot De Passe",
+            "description": "Nouveau mot de passe en clair"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "nouveau_mot_de_passe"
+        ],
+        "title": "ReinitialisationRequest",
+        "description": "Réinitialisation effective : token reçu par email + nouveau mot de passe.\n\nLe nouveau mot de passe suit la même politique de robustesse que\nl'inscription (`min_length=8`)."
+      },
+      "RoleRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "libelle": {
+            "type": "string",
+            "title": "Libelle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "libelle"
+        ],
+        "title": "RoleRead"
+      },
+      "SearchSireneSiretResponse": {
+        "properties": {
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret",
+            "description": "Numéro SIRET à 14 chiffres"
+          },
+          "sirene": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 9
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sirene",
+            "description": "Numéro SIRENE à 9 chiffres"
+          },
+          "raison_sociale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raison Sociale",
+            "description": "Nom ou raison sociale de l'entreprise"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse",
+            "description": "Numéro et voie du siège social"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "numero_tva": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Tva",
+            "description": "Numéro de TVA intracommunautaire"
+          },
+          "activite_principale": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activite Principale",
+            "description": "Activité principale de l'entreprise"
+          },
+          "nom_dirigeant": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom Dirigeant"
+          },
+          "prenom_dirigeant": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prenom Dirigeant"
+          },
+          "type_dirigeant": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Dirigeant"
+          }
+        },
+        "type": "object",
+        "title": "SearchSireneSiretResponse",
+        "description": "Schéma représentant les données renvoyées\npar l'API gouvernementale lors d'une recherche par SIRET.\nLes champs sont alignés avec ClientBase pour\nfaciliter le pré-remplissage côté front-end."
+      },
+      "StatutSouscription": {
+        "type": "string",
+        "enum": [
+          "actif",
+          "expiré",
+          "suspendu",
+          "annulé"
+        ],
+        "title": "StatutSouscription"
+      },
+      "TypeFacture": {
+        "type": "string",
+        "enum": [
+          "facture",
+          "avoir"
+        ],
+        "title": "TypeFacture",
+        "description": "Distingue une facture classique d'un avoir (facture d'annulation/correction)."
+      },
+      "TypeProduit": {
+        "type": "string",
+        "enum": [
+          "produit",
+          "prestation",
+          "service"
+        ],
+        "title": "TypeProduit"
+      },
+      "UtilisateurCreate": {
+        "properties": {
+          "nom": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Nom"
+          },
+          "prenom": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Prenom"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email",
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "default": true
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Password",
+            "description": "Mot de passe en clair"
+          },
+          "id_role": {
+            "type": "integer",
+            "title": "Id Role",
+            "description": "ID du rôle métier rattaché"
+          },
+          "est_admin": {
+            "type": "boolean",
+            "title": "Est Admin",
+            "description": "Droit admin au niveau de l'entreprise",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "nom",
+          "prenom",
+          "email",
+          "password",
+          "id_role"
+        ],
+        "title": "UtilisateurCreate",
+        "description": "Schéma pour créer un utilisateur avec son mot de passe en clair."
+      },
+      "UtilisateurRead": {
+        "properties": {
+          "nom": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Nom"
+          },
+          "prenom": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Prenom"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email",
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "default": true
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Modification"
+          },
+          "date_derniere_connexion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Derniere Connexion"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "est_admin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Admin",
+            "description": "Statut administrateur du membre dans l'entreprise active. Lecture seule : à utiliser pour pré-remplir le formulaire d'édition et éviter de retirer les droits par erreur."
+          }
+        },
+        "type": "object",
+        "required": [
+          "nom",
+          "prenom",
+          "email",
+          "id",
+          "date_creation",
+          "date_modification"
+        ],
+        "title": "UtilisateurRead",
+        "description": "Schéma de sortie (le hash n'est jamais renvoyé)."
+      },
+      "UtilisateurTeamUpdate": {
+        "properties": {
+          "nom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom"
+          },
+          "prenom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prenom"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Actif"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "id_role": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Role"
+          },
+          "est_admin": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Admin"
+          }
+        },
+        "type": "object",
+        "title": "UtilisateurTeamUpdate",
+        "description": "Hérite de tous les champs optionnels (nom, prenom, adresse...) de UtilisateurUpdate,\net y ajoute les champs de gestion réservés aux administrateurs."
+      },
+      "UtilisateurUpdate": {
+        "properties": {
+          "nom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom"
+          },
+          "prenom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prenom"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Actif"
+          }
+        },
+        "type": "object",
+        "title": "UtilisateurUpdate",
+        "description": "Schéma pour la mise à jour partielle d'un utilisateur."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "auth/token"
+          }
+        }
+      },
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-OCR-Secret-Token"
+      }
+    }
+  }
+}

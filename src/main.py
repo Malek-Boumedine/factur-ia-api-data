@@ -2,13 +2,17 @@ from importlib.metadata import PackageNotFoundError, version
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from src.abonnements.router import router as abonnement_router
 from src.auth.router import router as auth_router
 from src.catalogue_produits.router import router as catalogue_produits_router
 from src.clients.router import router as clients_router
 from src.core.config import settings
+from src.core.rate_limit import limiter
 from src.documents.router import router as documents_router
+from src.entreprises.router import router as entreprises_router
 from src.factures.router import router as factures_router
 from src.utilisateurs.router import router as utilisateurs_router
 
@@ -35,6 +39,14 @@ def get_application() -> FastAPI:
         swagger_ui_parameters={"docExpansion": "none"},
     )
 
+    # Rate-limiting (slowapi) : enregistre le limiteur et le handler dédié
+    # renvoyant un 429 lorsque le quota est dépassé.
+    _app.state.limiter = limiter
+    _app.add_exception_handler(
+        RateLimitExceeded,
+        _rate_limit_exceeded_handler,  # type: ignore[arg-type]
+    )
+
     # Configuration du CORS
     # On autorise tout en développement. À restreindre en production.
     _app.add_middleware(
@@ -52,6 +64,7 @@ def get_application() -> FastAPI:
     _app.include_router(catalogue_produits_router)
     _app.include_router(factures_router)
     _app.include_router(documents_router)
+    _app.include_router(entreprises_router)
 
     return _app
 

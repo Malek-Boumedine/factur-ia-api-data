@@ -6,10 +6,10 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 class UtilisateurBase(BaseModel):
     nom: str = Field(..., max_length=255)
     prenom: str = Field(..., max_length=255)
-    adresse: str = Field(..., max_length=255)
+    adresse: str | None = Field(default=None, max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
-    code_postal: str = Field(..., max_length=10)
-    ville: str = Field(..., max_length=150)
+    code_postal: str | None = Field(default=None, max_length=10)
+    ville: str | None = Field(default=None, max_length=150)
     email: EmailStr = Field(..., max_length=255)
     telephone: str | None = Field(default=None, max_length=20)
     est_actif: bool = Field(default=True)
@@ -19,6 +19,10 @@ class UtilisateurCreate(UtilisateurBase):
     """Schéma pour créer un utilisateur avec son mot de passe en clair."""
 
     password: str = Field(..., min_length=8, description="Mot de passe en clair")
+    id_role: int = Field(..., description="ID du rôle métier rattaché")
+    est_admin: bool = Field(
+        default=False, description="Droit admin au niveau de l'entreprise"
+    )
 
 
 class UtilisateurUpdate(BaseModel):
@@ -42,5 +46,25 @@ class UtilisateurRead(UtilisateurBase):
     date_creation: datetime
     date_modification: datetime
     date_derniere_connexion: datetime | None = None
+    role: str | None = None
+    est_admin: bool | None = Field(
+        default=None,
+        description=(
+            "Statut administrateur du membre dans l'entreprise active. "
+            "Lecture seule : à utiliser pour pré-remplir le formulaire d'édition "
+            "et éviter de retirer les droits par erreur."
+        ),
+    )
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UtilisateurTeamUpdate(UtilisateurUpdate):
+    """
+    Hérite de tous les champs optionnels (nom, prenom, adresse...) de UtilisateurUpdate,
+    et y ajoute les champs de gestion réservés aux administrateurs.
+    """
+
+    password: str | None = Field(default=None, min_length=8)
+    id_role: int | None = Field(default=None)
+    est_admin: bool | None = Field(default=None)

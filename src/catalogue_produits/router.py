@@ -1,14 +1,15 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.database import get_session
+from src.core.pagination import Page, PaginationParams, apply_search, paginate
 from src.utilisateurs.models import Utilisateur
 
-from .models import Catalogue
+from .models import Catalogue, TypeProduit
 from .schemas import CatalogueCreate, CatalogueRead, CatalogueUpdate
 
 router = APIRouter(prefix="/catalogue-produits", tags=["Catalogue Produits"])
@@ -40,24 +41,39 @@ async def create_produit(
     return db_produit
 
 
-@router.get("/", response_model=list[CatalogueRead])
+@router.get("/", response_model=Page[CatalogueRead])
 async def read_produits(
     session: SessionDep,
     x_entreprise_id: TenantDep,
-    skip: int = 0,
-    limit: int = 100,
+    pagination: Annotated[PaginationParams, Depends()],
+    search: Annotated[
+        str | None, Query(description="Recherche sur désignation ou référence.")
+    ] = None,
+    est_actif: Annotated[
+        bool | None, Query(description="Filtre sur le statut actif/inactif.")
+    ] = None,
+    type_produit: Annotated[
+        TypeProduit | None, Query(description="Filtre sur le type de produit.")
+    ] = None,
 ) -> Any:
     """
-    Récupère tous les produits du catalogue pour l'entreprise en cours.
+    Récupère les produits du catalogue de l'entreprise active, avec recherche,
+    filtres et pagination. La recherche et les filtres s'appliquent toujours à
+    l'intérieur du périmètre de l'entreprise (isolation tenant).
     """
-    statement = (
-        select(Catalogue)
-        .where(Catalogue.id_entreprise == x_entreprise_id)
-        .offset(skip)
-        .limit(limit)
+    statement = select(Catalogue).where(Catalogue.id_entreprise == x_entreprise_id)
+
+    if est_actif is not None:
+        statement = statement.where(Catalogue.est_actif == est_actif)
+    if type_produit is not None:
+        statement = statement.where(Catalogue.type_produit == type_produit)
+
+    statement = apply_search(
+        statement, [Catalogue.designation, Catalogue.reference], search
     )
-    produits = await session.exec(statement)
-    return produits.all()
+    statement = statement.order_by(Catalogue.designation)
+
+    return await paginate(session, statement, pagination)
 
 
 @router.get("/{produit_id}", response_model=CatalogueRead)

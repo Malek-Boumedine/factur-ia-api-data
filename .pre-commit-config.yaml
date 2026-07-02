@@ -26,6 +26,7 @@ repos:
           - "pydantic>=2.10.0"
           - "pydantic-settings>=2.7.0"
           - types-psycopg2
+          - "slowapi>=0.1.10"
 
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0

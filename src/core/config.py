@@ -26,6 +26,13 @@ class Settings(BaseSettings):
 
     SECRET_OCR_TOKEN: str
 
+    # RÉINITIALISATION DE MOT DE PASSE
+    # Valeurs par défaut fournies pour ne pas bloquer le démarrage ;
+    # à surcharger via l'environnement en production.
+    RESET_TOKEN_EXPIRE_HOURS: int = 2
+    FRONTEND_RESET_URL: str = "http://localhost:8000/reinitialiser-mot-de-passe"
+    EMAIL_SENDER: str = "no-reply@factur-ia.local"
+
     @property
     def DATABASE_URL(self) -> str:
         """

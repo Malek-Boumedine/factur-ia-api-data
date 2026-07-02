@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import TEXT, Column
@@ -28,7 +29,9 @@ class UtilisateurRole(SQLModel, table=True):
     # clé primaire simple : un utilisateur peut être
     # admin dans l'entreprise A et l'entreprise B
     id: int | None = Field(default=None, primary_key=True)
-    id_utilisateur: int = Field(foreign_key="utilisateur.id", index=True)
+    id_utilisateur: int = Field(
+        foreign_key="utilisateur.id", ondelete="CASCADE", index=True
+    )
     id_role: int = Field(foreign_key="role.id", index=True)
     id_entreprise: int | None = Field(
         default=None, foreign_key="entreprise.id", index=True
@@ -67,3 +70,27 @@ class Role(SQLModel, table=True):
     utilisateurs: list["Utilisateur"] = Relationship(
         back_populates="roles", link_model=UtilisateurRole
     )
+
+
+class ReinitialisationMotDePasse(SQLModel, table=True):
+    """
+    Token de réinitialisation de mot de passe, à usage unique et à durée de vie
+    limitée.
+
+    Le token en clair n'est jamais stocké : seul son hash SHA-256 est persisté
+    (``token_hash``). L'authentification étant globale (au niveau de l'email),
+    ce jeton est rattaché à l'utilisateur sans notion d'entreprise (tenant).
+    """
+
+    __tablename__ = "reinitialisation_mot_de_passe"
+
+    id: int | None = Field(default=None, primary_key=True)
+    id_utilisateur: int = Field(
+        foreign_key="utilisateur.id", ondelete="CASCADE", index=True
+    )
+    # hash SHA-256 hexadécimal (64 caractères) du token — jamais le clair
+    token_hash: str = Field(unique=True, index=True, max_length=64)
+    date_expiration: datetime
+    # NULL tant que le token n'a pas servi ; horodaté à la consommation
+    date_utilisation: datetime | None = Field(default=None)
+    date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))

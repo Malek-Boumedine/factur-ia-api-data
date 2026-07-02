@@ -226,3 +226,7 @@ __marimo__/
 todo*
 local_ci.sh
 /uploads
+
+# Claude Code
+.claude/
+CLAUDE.md

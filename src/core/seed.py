@@ -1,4 +1,5 @@
 import asyncio
+from decimal import Decimal
 from typing import Any
 
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -14,9 +15,11 @@ import src.notifications.models  # noqa: F401
 import src.pdp.models  # noqa: F401
 import src.relances.models  # noqa: F401
 import src.utilisateurs.models  # noqa: F401
-from src.core.database import async_session_maker
 
 # Imports spécifiques pour le seeding
+from src.abonnements.models import Abonnement
+from src.auth.models import Role
+from src.core.database import async_session_maker
 from src.factures.models import StatutFacture, TauxTva
 from src.notifications.models import TypeNotification
 from src.pdp.models import StatutDeclaration
@@ -24,6 +27,39 @@ from src.pdp.models import StatutDeclaration
 # ---------------------------------------------------------------------------
 # Données de référence
 # ---------------------------------------------------------------------------
+ROLES = [
+    {
+        "libelle": "PROPRIETAIRE",
+        "description": "Administrateur (Propriétaire / Gérant) — \
+            Accès total à toutes les ressources de l'entreprise.",
+    },
+    {
+        "libelle": "COMPTABLE",
+        "description": "Gestion de la facturation — \
+            Accès complet aux factures, avoirs et clients.",
+    },
+    {
+        "libelle": "COMMERCIAL",
+        "description": "Gestion commerciale — \
+            Création de brouillons et fiches clients. Pas de validation.",
+    },
+    {
+        "libelle": "LECTEUR",
+        "description": "Consultant ou invité externe — \
+            Lecture seule sur les documents et les clients.",
+    },
+]
+
+ABONNEMENTS = [
+    {
+        "libelle": "GRATUITE",
+        "description": "Plan gratuit par défaut attribué à toute nouvelle "
+        "entreprise lors de l'onboarding.",
+        "tarif": Decimal("0"),
+        "nombre_max_utilisateurs": 1,
+        "nombre_max_factures_mois": 10,
+    },
+]
 
 TAUX_TVA = [
     {"taux": "0.00", "libelle": "Exonéré", "est_actif": True},
@@ -31,6 +67,7 @@ TAUX_TVA = [
     {"taux": "10.00", "libelle": "Taux intermédiaire", "est_actif": True},
     {"taux": "20.00", "libelle": "Taux normal", "est_actif": True},
 ]
+
 
 STATUTS_FACTURE = [
     {
@@ -56,12 +93,14 @@ STATUTS_FACTURE = [
     {"libelle": "annulee", "description": "Annulée par un avoir."},
 ]
 
+
 STATUTS_DECLARATION = [
     {"libelle": "en_attente", "description": "Déclaration créée, non encore envoyée"},
     {"libelle": "envoyée", "description": "Déclaration transmise à l'administration"},
     {"libelle": "validée", "description": "Déclaration acceptée"},
     {"libelle": "rejetée", "description": "Déclaration refusée"},
 ]
+
 
 TYPES_NOTIFICATION = [
     {
@@ -85,6 +124,7 @@ TYPES_NOTIFICATION = [
         "est_actif": True,
     },
 ]
+
 
 UTILISATEUR_ADMIN = {
     "nom": "Admin",
@@ -124,16 +164,22 @@ async def _seed_table(
 
 async def run_seeds() -> None:
     async with async_session_maker() as session:
-        print("Seeding taux_tva...")
+        print("🌱 Seeding roles...")
+        await _seed_table(session, Role, ROLES, "libelle")
+
+        print("🌱 Seeding abonnements...")
+        await _seed_table(session, Abonnement, ABONNEMENTS, "libelle")
+
+        print("🌱 Seeding taux_tva...")
         await _seed_table(session, TauxTva, TAUX_TVA, "libelle")
 
-        print("Seeding statut_facture...")
+        print("🌱 Seeding statut_facture...")
         await _seed_table(session, StatutFacture, STATUTS_FACTURE, "libelle")
 
-        print("Seeding statut_declaration...")
+        print("🌱 Seeding statut_declaration...")
         await _seed_table(session, StatutDeclaration, STATUTS_DECLARATION, "libelle")
 
-        print("Seeding type_notification...")
+        print("🌱 Seeding type_notification...")
         await _seed_table(session, TypeNotification, TYPES_NOTIFICATION, "libelle")
 
         print("✅ Seeding terminé.")
