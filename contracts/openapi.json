@@ -465,7 +465,7 @@
           "Ecosystème Client"
         ],
         "summary": "Delete Client",
-        "description": "Supprime définitivement un client appartenant à l'entreprise active.",
+        "description": "Désactive un client (soft delete) de l'entreprise active.\n\nOn ne supprime jamais physiquement un client : des factures peuvent le\nréférencer (intégrité + conservation légale). L'opération est idempotente ;\nla réactivation se fait via PATCH avec `est_actif=true`.",
         "operationId": "delete_client_clients__client_id__delete",
         "security": [
           {

@@ -1,6 +1,8 @@
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -17,6 +19,7 @@ from src.clients.schemas import (
     SearchSireneSiretResponse,
 )
 from src.core.database import get_session
+from src.core.db_errors import UniqueConflict, conflict_from_integrity_error
 from src.core.pagination import Page, PaginationParams, apply_search, paginate
 from src.integrations.siren_gouv.client import get_company_by_identifier
 from src.utilisateurs.models import Utilisateur
@@ -25,6 +28,12 @@ router = APIRouter(prefix="/clients", tags=["Ecosystème Client"])
 entreprise_id_dep = Annotated[int, Depends(verify_tenant_access)]
 current_user_dep = Annotated[Utilisateur, Depends(get_current_user)]
 session_dep = Annotated[AsyncSession, Depends(get_session)]
+
+# Contraintes uniques de la table `client` mappées vers un message clair.
+_CLIENT_UNIQUE_CONFLICTS = [
+    UniqueConflict("numero_tva", "Un client avec ce numéro de TVA existe déjà."),
+    UniqueConflict("siret", "Un client avec ce SIRET existe déjà."),
+]
 
 
 @router.post("/", response_model=ClientRead, status_code=status.HTTP_201_CREATED)
@@ -46,7 +55,11 @@ async def create_client(
     )
 
     session.add(db_client)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise conflict_from_integrity_error(exc, _CLIENT_UNIQUE_CONFLICTS) from None
     await session.refresh(db_client)
 
     return db_client
@@ -140,11 +153,22 @@ async def update_client(
     for key, value in client_data.items():
         setattr(db_client, key, value)
 
+    # Synchronise la date de désactivation avec le statut actif :
+    # réactivation -> on efface la date, désactivation -> on l'horodate.
+    if "est_actif" in client_data:
+        db_client.date_desactivation = (
+            None if db_client.est_actif else datetime.now(UTC)
+        )
+
     # Mise à jour de la traçabilité
     db_client.id_modificateur = current_user.id
 
     session.add(db_client)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise conflict_from_integrity_error(exc, _CLIENT_UNIQUE_CONFLICTS) from None
     await session.refresh(db_client)
 
     return db_client
@@ -153,12 +177,17 @@ async def update_client(
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client(
     client_id: int,
+    current_user: current_user_dep,
     entreprise_id: entreprise_id_dep,
     _: Annotated[Utilisateur, Depends(RequirePermission("client:delete"))],
     session: session_dep,
 ) -> None:
     """
-    Supprime définitivement un client appartenant à l'entreprise active.
+    Désactive un client (soft delete) de l'entreprise active.
+
+    On ne supprime jamais physiquement un client : des factures peuvent le
+    référencer (intégrité + conservation légale). L'opération est idempotente ;
+    la réactivation se fait via PATCH avec `est_actif=true`.
     """
     statement = select(Client).where(
         Client.id == client_id, Client.id_entreprise == entreprise_id
@@ -172,8 +201,12 @@ async def delete_client(
             detail="Client introuvable dans cet espace entreprise",
         )
 
-    await session.delete(db_client)
-    await session.commit()
+    if db_client.est_actif:
+        db_client.est_actif = False
+        db_client.date_desactivation = datetime.now(UTC)
+        db_client.id_modificateur = current_user.id
+        session.add(db_client)
+        await session.commit()
 
 
 @router.get(
