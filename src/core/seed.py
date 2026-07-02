@@ -134,15 +134,31 @@ TYPES_NOTIFICATION = [
 async def _seed_table(
     session: AsyncSession, model: type, items: list[dict[str, Any]], unique_field: str
 ) -> None:
-    """Insère les enregistrements manquants (idempotent)."""
+    """
+    Insère les enregistrements manquants (idempotent).
+
+    L'existence est d'abord testée sur `unique_field`. L'insertion se fait
+    ensuite dans un SAVEPOINT : si la ligne existe déjà sous une *autre*
+    contrainte d'unicité (ex : `taux_tva.taux` alors qu'on filtre sur
+    `libelle`), le doublon est ignoré silencieusement sans invalider les
+    autres insertions du lot.
+    """
+    from sqlalchemy.exc import IntegrityError
     from sqlmodel import select
 
     for data in items:
         existing: Any = await session.exec(
             select(model).where(getattr(model, unique_field) == data[unique_field])
         )
-        if existing.first() is None:
-            session.add(model(**data))
+        if existing.first() is not None:
+            continue
+
+        try:
+            async with session.begin_nested():
+                session.add(model(**data))
+        except IntegrityError:
+            # Déjà présent sous une autre clé unique → on ignore.
+            pass
 
     await session.commit()
 
