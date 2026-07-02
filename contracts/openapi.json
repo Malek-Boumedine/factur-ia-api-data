@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "paths": {
     "/auth/token": {
@@ -32,6 +32,90 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Login"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/mot-de-passe-oublie": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Forgot Password",
+        "description": "Déclenche l'envoi d'un lien de réinitialisation de mot de passe.\n\nLa réponse est **toujours identique**, que l'email corresponde à un compte\nou non, afin de ne pas divulguer l'existence d'un utilisateur.",
+        "operationId": "forgot_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MotDePasseOublieRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reinitialiser-mot-de-passe": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "summary": "Reset Password",
+        "description": "Réinitialise le mot de passe à partir d'un token reçu par email.\n\nLe token doit exister, être non expiré et ne pas avoir déjà servi. En cas\nd'échec, un message générique est renvoyé (pas de détail sur la cause).",
+        "operationId": "reset_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReinitialisationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
@@ -144,7 +228,7 @@
           "Ecosystème Client"
         ],
         "summary": "List Clients",
-        "description": "Récupère la liste de tous les clients appartenant à l'entreprise active.",
+        "description": "Récupère les clients de l'entreprise active, avec recherche, filtres\net pagination. La recherche et les filtres s'appliquent toujours à\nl'intérieur du périmètre de l'entreprise (isolation tenant).",
         "operationId": "list_clients_clients__get",
         "security": [
           {
@@ -152,6 +236,69 @@
           }
         ],
         "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur raison sociale, SIRET ou email.",
+              "title": "Search"
+            },
+            "description": "Recherche sur raison sociale, SIRET ou email."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif.",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
           {
             "name": "x-entreprise-id",
             "in": "header",
@@ -170,11 +317,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ClientRead"
-                  },
-                  "title": "Response List Clients Clients  Get"
+                  "$ref": "#/components/schemas/Page_ClientRead_"
                 }
               }
             }
@@ -1023,7 +1166,7 @@
           "Catalogue Produits"
         ],
         "summary": "Read Produits",
-        "description": "Récupère tous les produits du catalogue pour l'entreprise en cours.",
+        "description": "Récupère les produits du catalogue de l'entreprise active, avec recherche,\nfiltres et pagination. La recherche et les filtres s'appliquent toujours à\nl'intérieur du périmètre de l'entreprise (isolation tenant).",
         "operationId": "read_produits_catalogue_produits__get",
         "security": [
           {
@@ -1032,14 +1175,71 @@
         ],
         "parameters": [
           {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur désignation ou référence.",
+              "title": "Search"
+            },
+            "description": "Recherche sur désignation ou référence."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif.",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif."
+          },
+          {
+            "name": "type_produit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TypeProduit"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le type de produit.",
+              "title": "Type Produit"
+            },
+            "description": "Filtre sur le type de produit."
+          },
+          {
             "name": "skip",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
               "default": 0,
               "title": "Skip"
-            }
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
           },
           {
             "name": "limit",
@@ -1047,9 +1247,13 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
               "default": 100,
               "title": "Limit"
-            }
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
           },
           {
             "name": "x-entreprise-id",
@@ -1069,11 +1273,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CatalogueRead"
-                  },
-                  "title": "Response Read Produits Catalogue Produits  Get"
+                  "$ref": "#/components/schemas/Page_CatalogueRead_"
                 }
               }
             }
@@ -1558,6 +1758,53 @@
         "security": [
           {
             "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/entreprises/": {
+      "post": {
+        "tags": [
+          "Entreprises"
+        ],
+        "summary": "Create Entreprise Endpoint",
+        "description": "Crée un premier espace de travail (entreprise) pour l'utilisateur connecté.\n\nAuthentification JWT requise, **sans** header `x-entreprise-id` : l'utilisateur\nn'a pas encore d'entreprise. Il en devient propriétaire (droit admin + rôle\nPROPRIETAIRE) et l'entreprise est souscrite au plan gratuit.",
+        "operationId": "create_entreprise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntrepriseCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
           }
         ]
       }
@@ -2560,6 +2807,101 @@
         "title": "EntrepriseAbonnementRead",
         "description": "Détails de la souscription d'une entreprise à un abonnement."
       },
+      "EntrepriseCreate": {
+        "properties": {
+          "nom_entreprise": {
+            "type": "string",
+            "maxLength": 255,
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14,
+                "minLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret",
+            "description": "SIRET à 14 chiffres (optionnel)."
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nom_entreprise"
+        ],
+        "title": "EntrepriseCreate",
+        "description": "Données d'onboarding pour créer un premier espace de travail."
+      },
+      "EntrepriseRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_entreprise": {
+            "type": "string",
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret"
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Modification"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_entreprise",
+          "siret",
+          "id_forme_juridique",
+          "date_creation",
+          "date_modification"
+        ],
+        "title": "EntrepriseRead",
+        "description": "Schéma de sortie d'une entreprise."
+      },
       "FactureCreate": {
         "properties": {
           "id_client": {
@@ -3134,6 +3476,36 @@
         ],
         "title": "LigneOcr"
       },
+      "MessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "MessageResponse",
+        "description": "Réponse neutre générique (ne divulgue aucune information sensible)."
+      },
+      "MotDePasseOublieRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email",
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "MotDePasseOublieRequest",
+        "description": "Demande de réinitialisation : uniquement l'email du compte concerné."
+      },
       "OcrWebhookPayload": {
         "properties": {
           "id_document": {
@@ -3262,6 +3634,90 @@
           "total_ttc"
         ],
         "title": "OcrWebhookPayload"
+      },
+      "Page_CatalogueRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogueRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[CatalogueRead]"
+      },
+      "Page_ClientRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClientRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[ClientRead]"
+      },
+      "ReinitialisationRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Token reçu dans le lien de réinitialisation"
+          },
+          "nouveau_mot_de_passe": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Nouveau Mot De Passe",
+            "description": "Nouveau mot de passe en clair"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "nouveau_mot_de_passe"
+        ],
+        "title": "ReinitialisationRequest",
+        "description": "Réinitialisation effective : token reçu par email + nouveau mot de passe.\n\nLe nouveau mot de passe suit la même politique de robustesse que\nl'inscription (`min_length=8`)."
       },
       "RoleRead": {
         "properties": {

@@ -1,6 +1,6 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -17,6 +17,7 @@ from src.clients.schemas import (
     SearchSireneSiretResponse,
 )
 from src.core.database import get_session
+from src.core.pagination import Page, PaginationParams, apply_search, paginate
 from src.integrations.siren_gouv.client import get_company_by_identifier
 from src.utilisateurs.models import Utilisateur
 
@@ -51,19 +52,36 @@ async def create_client(
     return db_client
 
 
-@router.get("/", response_model=list[ClientRead])
+@router.get("/", response_model=Page[ClientRead])
 async def list_clients(
     entreprise_id: entreprise_id_dep,
     _: Annotated[Utilisateur, Depends(RequirePermission("client:read"))],
     session: session_dep,
+    pagination: Annotated[PaginationParams, Depends()],
+    search: Annotated[
+        str | None,
+        Query(description="Recherche sur raison sociale, SIRET ou email."),
+    ] = None,
+    est_actif: Annotated[
+        bool | None, Query(description="Filtre sur le statut actif/inactif.")
+    ] = None,
 ) -> Any:
     """
-    Récupère la liste de tous les clients appartenant à l'entreprise active.
+    Récupère les clients de l'entreprise active, avec recherche, filtres
+    et pagination. La recherche et les filtres s'appliquent toujours à
+    l'intérieur du périmètre de l'entreprise (isolation tenant).
     """
     statement = select(Client).where(Client.id_entreprise == entreprise_id)
-    result = await session.exec(statement)
 
-    return result.all()
+    if est_actif is not None:
+        statement = statement.where(Client.est_actif == est_actif)
+
+    statement = apply_search(
+        statement, [Client.raison_sociale, Client.siret, Client.email], search
+    )
+    statement = statement.order_by(Client.raison_sociale)
+
+    return await paginate(session, statement, pagination)
 
 
 @router.get("/{client_id}", response_model=ClientRead)
