@@ -52,7 +52,11 @@ class Catalogue(SQLModel, table=True):
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))
     date_modification: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
-        sa_column=Column(DateTime(timezone=True), onupdate=lambda: datetime.now(UTC)),
+        sa_column=Column(
+            DateTime(timezone=True),
+            default=lambda: datetime.now(UTC),
+            onupdate=lambda: datetime.now(UTC),
+        ),
     )
 
     # --- RELATIONS ---
