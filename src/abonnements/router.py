@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.abonnements import services
 from src.abonnements.models import Abonnement, EntrepriseAbonnement
 from src.abonnements.schemas import (
     AbonnementCreate,
@@ -99,19 +100,23 @@ async def update_plan(
     return db_plan
 
 
-@router.delete("/{abonnement_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{abonnement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": "Plan encore souscrit par au moins une entreprise.",
+        }
+    },
+)
 async def delete_plan(
     abonnement_id: int,
     _: Annotated[Utilisateur, Depends(require_admin_plateforme)],
     session: SessionDep,
 ) -> None:
     """
-    Supprime un plan d'abonnement.
-    Réservé aux administrateurs de la plateforme.
-    """
-    db_plan = await session.get(Abonnement, abonnement_id)
-    if not db_plan:
-        raise HTTPException(status_code=404, detail="Plan d'abonnement introuvable")
+    Supprime un plan d'abonnement. Réservé aux administrateurs de la plateforme.
 
-    await session.delete(db_plan)
-    await session.commit()
+    Renvoie 409 si le plan est encore souscrit par des entreprises.
+    """
+    await services.delete_plan(session, abonnement_id)

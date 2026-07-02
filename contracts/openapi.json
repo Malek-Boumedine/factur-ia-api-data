@@ -723,7 +723,7 @@
           "Gestion des Abonnements"
         ],
         "summary": "Delete Plan",
-        "description": "Supprime un plan d'abonnement.\nRéservé aux administrateurs de la plateforme.",
+        "description": "Supprime un plan d'abonnement. Réservé aux administrateurs de la plateforme.\n\nRenvoie 409 si le plan est encore souscrit par des entreprises.",
         "operationId": "delete_plan_abonnements__abonnement_id__delete",
         "security": [
           {
@@ -744,6 +744,9 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "Plan encore souscrit par au moins une entreprise."
           },
           "422": {
             "description": "Validation Error",
