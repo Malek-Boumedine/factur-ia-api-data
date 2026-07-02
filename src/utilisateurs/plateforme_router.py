@@ -8,7 +8,7 @@ au niveau global (aucun header `x-entreprise-id` requis).
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import require_admin_plateforme
@@ -31,6 +31,25 @@ AdminDep = Annotated[Utilisateur, Depends(require_admin_plateforme)]
 async def list_admins(session: SessionDep) -> list[Utilisateur]:
     """Liste les administrateurs de la plateforme."""
     return await services.list_platform_admins(session)
+
+
+@router.get("/recherche-utilisateur", response_model=list[AdminPlateformeRead])
+async def search_user(
+    session: SessionDep,
+    email: Annotated[
+        str,
+        Query(
+            min_length=2,
+            description="Fragment d'email à rechercher "
+            "(partiel, insensible à la casse).",
+        ),
+    ],
+) -> list[Utilisateur]:
+    """
+    Recherche des utilisateurs par email pour désigner un candidat à la
+    promotion. Réservé aux admins plateforme, sans périmètre d'entreprise.
+    """
+    return await services.search_users_by_email(session, email)
 
 
 @router.post("/{utilisateur_id}/promouvoir", response_model=AdminPlateformeRead)

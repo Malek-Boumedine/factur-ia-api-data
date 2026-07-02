@@ -22,6 +22,26 @@ async def list_platform_admins(session: AsyncSession) -> list[Utilisateur]:
     return list(result.all())
 
 
+async def search_users_by_email(
+    session: AsyncSession, email: str, limit: int = 20
+) -> list[Utilisateur]:
+    """
+    Recherche des utilisateurs par email (partielle, insensible à la casse).
+
+    Privilège élevé réservé aux admins plateforme : permet de retrouver un
+    utilisateur global (au-delà d'une entreprise) pour le désigner à la
+    promotion. Requête paramétrée, résultats plafonnés à `limit`.
+    """
+    statement = (
+        select(Utilisateur)
+        .where(Utilisateur.email.ilike(f"%{email}%"))  # type: ignore[attr-defined]
+        .order_by(Utilisateur.email)
+        .limit(limit)
+    )
+    result = await session.exec(statement)
+    return list(result.all())
+
+
 async def _get_user_or_404(session: AsyncSession, utilisateur_id: int) -> Utilisateur:
     """Charge un utilisateur par son ID ou lève une 404."""
     user = await session.get(Utilisateur, utilisateur_id)

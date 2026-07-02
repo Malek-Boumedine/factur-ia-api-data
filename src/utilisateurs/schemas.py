@@ -46,6 +46,10 @@ class UtilisateurRead(UtilisateurBase):
     date_creation: datetime
     date_modification: datetime
     date_derniere_connexion: datetime | None = None
+    admin_plateforme: bool = Field(
+        default=False,
+        description="Statut administrateur global de la plateforme (lecture seule).",
+    )
     role: str | None = None
     est_admin: bool | None = Field(
         default=None,
