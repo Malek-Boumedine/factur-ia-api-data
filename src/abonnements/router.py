@@ -31,11 +31,11 @@ CurrentUserDep = Annotated[Utilisateur, Depends(get_current_user)]
 @router.get("/", response_model=list[AbonnementRead])
 async def list_plans(
     session: SessionDep,
-    current_user: CurrentUserDep,
 ) -> Any:
     """
     Liste tous les plans d'abonnement disponibles sur la plateforme.
-    Accessible par tout utilisateur authentifié.
+    Route publique : les offres et leurs tarifs sont affichés sur la page
+    d'accueil du client web, sans authentification.
     """
     statement = select(Abonnement)
     result = await session.exec(statement)

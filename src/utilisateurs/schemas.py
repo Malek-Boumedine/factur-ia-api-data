@@ -25,8 +25,28 @@ class UtilisateurCreate(UtilisateurBase):
     )
 
 
+class ProfilUpdate(BaseModel):
+    """
+    Mise à jour partielle du profil par l'utilisateur lui-même (self-update).
+
+    Volontairement restreint : ni `email` (modifiable uniquement via l'endpoint
+    dédié sécurisé `POST /utilisateurs/me/changer-email`, qui exige le mot de
+    passe actuel) ni `est_actif` (un utilisateur ne peut pas se désactiver
+    lui-même). Ces deux champs restent réservés à la voie admin
+    (`UtilisateurTeamUpdate`).
+    """
+
+    nom: str | None = None
+    prenom: str | None = None
+    adresse: str | None = None
+    adresse_complement: str | None = None
+    code_postal: str | None = Field(default=None, max_length=10)
+    ville: str | None = Field(default=None, max_length=150)
+    telephone: str | None = None
+
+
 class UtilisateurUpdate(BaseModel):
-    """Schéma pour la mise à jour partielle d'un utilisateur."""
+    """Schéma pour la mise à jour partielle d'un utilisateur (voie admin)."""
 
     nom: str | None = None
     prenom: str | None = None
@@ -37,6 +57,49 @@ class UtilisateurUpdate(BaseModel):
     email: EmailStr | None = None
     telephone: str | None = None
     est_actif: bool | None = None
+
+
+class ChangementMotDePasseRequest(BaseModel):
+    """
+    Changement de mot de passe par un utilisateur connecté.
+
+    Le mot de passe actuel est exigé pour re-vérifier l'identité avant tout
+    changement (jamais de modification à l'aveugle sur une session ouverte). Le
+    nouveau suit la même politique de robustesse que l'inscription et la
+    réinitialisation (`min_length=8`).
+    """
+
+    mot_de_passe_actuel: str = Field(..., description="Mot de passe actuel en clair")
+    nouveau_mot_de_passe: str = Field(
+        ..., min_length=8, description="Nouveau mot de passe en clair"
+    )
+
+
+class ChangementEmailRequest(BaseModel):
+    """
+    Changement d'email par un utilisateur connecté.
+
+    L'email étant l'identifiant de connexion, le mot de passe actuel est exigé
+    pour re-vérifier l'identité avant tout changement (jamais de modification à
+    l'aveugle sur une session ouverte).
+    """
+
+    mot_de_passe_actuel: str = Field(..., description="Mot de passe actuel en clair")
+    nouvel_email: EmailStr = Field(..., max_length=255, description="Nouvel email")
+
+
+class ChangementEmailResponse(BaseModel):
+    """
+    Réponse au changement d'email.
+
+    L'email étant le `sub` du JWT, l'ancien token devient caduc dès le
+    changement. On ré-émet donc un token frais (aligné sur le format du login)
+    pour que la session se poursuive sans reconnexion.
+    """
+
+    message: str
+    access_token: str = Field(..., description="Nouveau JWT à utiliser désormais")
+    token_type: str = Field(default="bearer")
 
 
 class UtilisateurRead(UtilisateurBase):
