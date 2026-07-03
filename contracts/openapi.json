@@ -560,7 +560,7 @@
           "Gestion des Abonnements"
         ],
         "summary": "List Plans",
-        "description": "Liste tous les plans d'abonnement disponibles sur la plateforme.\nAccessible par tout utilisateur authentifié.",
+        "description": "Liste tous les plans d'abonnement disponibles sur la plateforme.\nRoute publique : les offres et leurs tarifs sont affichés sur la page\nd'accueil du client web, sans authentification.",
         "operationId": "list_plans_abonnements__get",
         "responses": {
           "200": {
@@ -577,12 +577,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
