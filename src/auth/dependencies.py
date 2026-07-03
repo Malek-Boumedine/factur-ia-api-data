@@ -55,68 +55,6 @@ async def get_current_user(
     return user
 
 
-# gestion RBAC
-class RequirePermission:
-    """
-    Dépendance FastAPI pour le contrôle des accès basé sur les rôles (RBAC).
-
-    Cette classe est conçue pour être injectée dans les routes FastAPI via `Depends()`.
-    Elle vérifie de manière asynchrone en base de données si l'utilisateur
-    authentifié possède la permission spécifique requise pour exécuter l'action.
-    """
-
-    def __init__(self, required_permission: str) -> None:
-        self.required_permission = required_permission
-
-    async def __call__(
-        self,
-        current_user: Annotated[Utilisateur, Depends(get_current_user)],
-        session: Annotated[AsyncSession, Depends(get_session)],
-    ) -> Utilisateur:
-        """
-        Exécute la vérification des droits d'accès lors de l'appel de l'endpoint.
-        """
-        statement = (
-            select(Permission)
-            .join(PermissionRole, Permission.id == PermissionRole.id_permission)  # type: ignore
-            .join(Role, Role.id == PermissionRole.id_role)  # type: ignore
-            .join(UtilisateurRole, Role.id == UtilisateurRole.id_role)  # type: ignore
-            .where(UtilisateurRole.id_utilisateur == current_user.id)
-            .where(Permission.libelle == self.required_permission)
-        )
-
-        result = await session.exec(statement)
-        has_permission = result.first()
-
-        if not has_permission:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Privilèges insuffisants. \
-                    Permission requise : {self.required_permission}",
-            )
-
-        return current_user
-
-
-async def require_admin_plateforme(
-    current_user: Annotated[Utilisateur, Depends(get_current_user)],
-) -> Utilisateur:
-    """
-    Dépendance de sécurité au niveau plateforme.
-
-    Autorise uniquement les administrateurs de la plateforme (flag
-    `admin_plateforme` sur l'utilisateur du JWT). Contrairement à
-    `verify_tenant_access`, elle est indépendante du header `x-entreprise-id` :
-    l'admin plateforme agit au niveau global, hors périmètre d'une entreprise.
-    """
-    if not current_user.admin_plateforme:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès réservé aux administrateurs de la plateforme.",
-        )
-    return current_user
-
-
 # isolation de l'entreprise (tenant)
 async def verify_tenant_access(
     x_entreprise_id: Annotated[
@@ -153,3 +91,76 @@ async def verify_tenant_access(
         )
 
     return x_entreprise_id
+
+
+# gestion RBAC
+class RequirePermission:
+    """
+    Dépendance FastAPI pour le contrôle des accès basé sur les rôles (RBAC).
+
+    Cette classe est conçue pour être injectée dans les routes FastAPI via `Depends()`.
+    Elle vérifie de manière asynchrone en base de données si l'utilisateur
+    authentifié possède la permission spécifique requise pour exécuter l'action.
+    """
+
+    def __init__(self, required_permission: str) -> None:
+        self.required_permission = required_permission
+
+    async def __call__(
+        self,
+        current_user: Annotated[Utilisateur, Depends(get_current_user)],
+        entreprise_id: Annotated[int, Depends(verify_tenant_access)],
+        session: Annotated[AsyncSession, Depends(get_session)],
+    ) -> Utilisateur:
+        """
+        Exécute la vérification des droits d'accès lors de l'appel de l'endpoint.
+
+        La permission est évaluée **dans le contexte de l'entreprise active**
+        (`x-entreprise-id`, validée par ``verify_tenant_access``) : seuls les rôles
+        rattachés à cette entreprise — ou les rôles globaux (``id_entreprise`` NULL)
+        — sont pris en compte. Un rôle élevé détenu dans une autre entreprise ne
+        confère donc aucun droit ici (isolation RBAC par tenant).
+        """
+        statement = (
+            select(Permission)
+            .join(PermissionRole, Permission.id == PermissionRole.id_permission)  # type: ignore
+            .join(Role, Role.id == PermissionRole.id_role)  # type: ignore
+            .join(UtilisateurRole, Role.id == UtilisateurRole.id_role)  # type: ignore
+            .where(UtilisateurRole.id_utilisateur == current_user.id)
+            .where(
+                (UtilisateurRole.id_entreprise == entreprise_id)
+                | (UtilisateurRole.id_entreprise.is_(None))  # type: ignore[union-attr]
+            )
+            .where(Permission.libelle == self.required_permission)
+        )
+
+        result = await session.exec(statement)
+        has_permission = result.first()
+
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Privilèges insuffisants. \
+                    Permission requise : {self.required_permission}",
+            )
+
+        return current_user
+
+
+async def require_admin_plateforme(
+    current_user: Annotated[Utilisateur, Depends(get_current_user)],
+) -> Utilisateur:
+    """
+    Dépendance de sécurité au niveau plateforme.
+
+    Autorise uniquement les administrateurs de la plateforme (flag
+    `admin_plateforme` sur l'utilisateur du JWT). Contrairement à
+    `verify_tenant_access`, elle est indépendante du header `x-entreprise-id` :
+    l'admin plateforme agit au niveau global, hors périmètre d'une entreprise.
+    """
+    if not current_user.admin_plateforme:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès réservé aux administrateurs de la plateforme.",
+        )
+    return current_user
