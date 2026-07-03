@@ -3,6 +3,7 @@ Logique métier de gestion des plans d'abonnement (réservée aux admins
 plateforme). Router mince : les règles et la gestion d'erreurs vivent ici.
 """
 
+import calendar
 from datetime import date
 
 from fastapi import HTTPException, status
@@ -20,11 +21,112 @@ from src.core.db_errors import UniqueConflict, conflict_from_integrity_error
 from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
 
+# Libellé du plan gratuit seedé, plan de repli à l'expiration.
+_FREE_PLAN_LIBELLE = "GRATUITE"
+
 # Message unique, réutilisé par la pré-vérification et le filet IntegrityError.
 _PLAN_EN_USAGE_DETAIL = (
     "Ce plan est encore souscrit par une ou plusieurs entreprises "
     "et ne peut pas être supprimé."
 )
+
+
+def add_one_month(d: date) -> date:
+    """
+    Retourne la date un mois plus tard, bornée au dernier jour du mois cible.
+
+    Robuste aux mois de longueurs différentes (31 janvier + 1 mois -> 28 ou 29
+    février), contrairement à un simple « +30 jours ».
+    """
+    month = d.month + 1
+    year = d.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(d.day, last_day))
+
+
+async def _resoudre_plan_gratuit(session: AsyncSession) -> Abonnement:
+    """Retourne le plan gratuit seedé (repli d'expiration) ou lève une 500."""
+    result = await session.exec(
+        select(Abonnement).where(Abonnement.libelle == _FREE_PLAN_LIBELLE)
+    )
+    plan = result.first()
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                f"Configuration manquante : le plan '{_FREE_PLAN_LIBELLE}' est "
+                "introuvable (le seed n'a pas été exécuté)."
+            ),
+        )
+    return plan
+
+
+async def _get_souscription_active(
+    session: AsyncSession, entreprise_id: int
+) -> EntrepriseAbonnement | None:
+    """
+    Souscription active courante de l'entreprise (la plus récente si plusieurs).
+    """
+    statement = (
+        select(EntrepriseAbonnement)
+        .where(EntrepriseAbonnement.id_entreprise == entreprise_id)
+        .where(EntrepriseAbonnement.statut == StatutSouscription.ACTIF)
+        .order_by(
+            col(EntrepriseAbonnement.date_debut).desc(),
+            col(EntrepriseAbonnement.id).desc(),
+        )
+    )
+    return (await session.exec(statement)).first()
+
+
+async def reconcile_expired_subscription(
+    session: AsyncSession, entreprise_id: int
+) -> EntrepriseAbonnement | None:
+    """
+    Expiration paresseuse (lazy) de la souscription active d'une entreprise.
+
+    Si la souscription active est un plan payant dont l'échéance est passée
+    (``date_fin < aujourd'hui``), elle est clôturée (statut ``expiré``) et
+    l'entreprise bascule sur le plan gratuit (nouvelle souscription ``ACTIF``,
+    ``date_fin`` nulle) — le tout en une seule transaction atomique, pour ne
+    jamais laisser l'entreprise sans abonnement actif.
+
+    Le plan gratuit (``date_fin is None``) n'expire jamais : aucun effet. Cas non
+    couvert (acceptable MVP) : une entreprise jamais consultée ne verra son
+    expiration qu'au prochain accès.
+
+    Retourne la souscription active à jour (éventuellement la nouvelle gratuite),
+    ou ``None`` si l'entreprise n'a aucune souscription active.
+    """
+    active = await _get_souscription_active(session, entreprise_id)
+    if active is None:
+        return None
+    # Plan sans échéance (gratuit) : n'expire jamais.
+    if active.date_fin is None:
+        return active
+    # Échéance non atteinte : encore valide.
+    if active.date_fin >= date.today():
+        return active
+
+    # Souscription payante échue -> bascule atomique vers le plan gratuit.
+    free_plan = await _resoudre_plan_gratuit(session)
+    active.statut = StatutSouscription.EXPIRE
+    session.add(active)
+
+    nouvelle_souscription = EntrepriseAbonnement(
+        id_entreprise=entreprise_id,
+        id_abonnement=free_plan.id,
+        date_debut=date.today(),
+        date_fin=None,
+        statut=StatutSouscription.ACTIF,
+    )
+    session.add(nouvelle_souscription)
+
+    await session.commit()
+    await session.refresh(nouvelle_souscription)
+    return nouvelle_souscription
+
 
 # La FK entreprise_abonnement -> abonnement fait apparaître le nom de la table
 # référençante dans le message d'erreur MySQL.
@@ -109,6 +211,9 @@ async def change_plan(
     et la création sont toutes deux persistées, soit aucune (pas d'état
     intermédiaire).
 
+    Échéance : un plan payant (``tarif > 0``) reçoit ``date_fin = date_debut +
+    1 mois`` ; le plan gratuit (``tarif == 0``) n'expire jamais (``date_fin`` nulle).
+
     Règles :
     - plan cible inexistant -> 404 ;
     - entreprise déjà sur ce plan -> 409 ;
@@ -151,6 +256,9 @@ async def change_plan(
         )
 
     aujourd_hui = date.today()
+    # Le plan gratuit (tarif nul) n'expire jamais ; un plan payant échoit à un
+    # mois de sa date de début.
+    date_fin = None if plan_cible.tarif == 0 else add_one_month(aujourd_hui)
 
     # Clôture de l'existant (historique préservé) + création de la nouvelle
     # souscription, le tout dans une seule transaction.
@@ -163,6 +271,7 @@ async def change_plan(
         id_entreprise=entreprise_id,
         id_abonnement=id_abonnement,
         date_debut=aujourd_hui,
+        date_fin=date_fin,
         statut=StatutSouscription.ACTIF,
     )
     session.add(nouvelle_souscription)
@@ -171,3 +280,37 @@ async def change_plan(
     await session.refresh(nouvelle_souscription)
 
     return nouvelle_souscription
+
+
+async def prolonger_abonnement(
+    session: AsyncSession, entreprise_id: int
+) -> EntrepriseAbonnement:
+    """
+    Prolonge d'un mois l'abonnement payant actif de l'entreprise (renouvellement
+    manuel, sans paiement pour le MVP) : ``date_fin`` est repoussée d'un mois
+    depuis son échéance courante.
+
+    Réconcilie d'abord une éventuelle expiration : un plan déjà échu est retombé
+    sur le gratuit, qui n'a pas d'échéance et n'est donc pas prolongeable.
+
+    Règles :
+    - aucune souscription active -> 404 ;
+    - plan gratuit (rien à prolonger) -> 409.
+    """
+    active = await reconcile_expired_subscription(session, entreprise_id)
+    if active is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aucune souscription active à prolonger.",
+        )
+    if active.date_fin is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le plan gratuit n'expire pas et ne peut pas être prolongé.",
+        )
+
+    active.date_fin = add_one_month(active.date_fin)
+    session.add(active)
+    await session.commit()
+    await session.refresh(active)
+    return active

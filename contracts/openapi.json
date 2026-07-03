@@ -636,7 +636,7 @@
           "Gestion des Abonnements"
         ],
         "summary": "Get My Subscriptions",
-        "description": "Récupère les abonnements des entreprises (espaces de travail)\nauxquelles l'utilisateur actuel est rattaché.",
+        "description": "Récupère les abonnements des entreprises (espaces de travail)\nauxquelles l'utilisateur actuel est rattaché.\n\nApplique au passage l'expiration paresseuse (lazy) : toute souscription\npayante échue de ces entreprises est basculée sur le plan gratuit avant la\nlecture, afin de renvoyer un état à jour.",
         "operationId": "get_my_subscriptions_abonnements_me_get",
         "responses": {
           "200": {
@@ -719,6 +719,68 @@
           },
           "409": {
             "description": "Déjà sur ce plan, ou trop d'utilisateurs actifs pour le plan cible."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/abonnements/me/prolonger": {
+      "post": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "Extend My Plan",
+        "description": "Prolonge d'un mois l'abonnement payant de l'entreprise active (renouvellement\nmanuel, sans paiement pour le MVP).\n\nRéservé aux administrateurs de l'entreprise (header `x-entreprise-id`). Le\nplan gratuit n'ayant pas d'échéance, il n'est pas prolongeable (409).",
+        "operationId": "extend_my_plan_abonnements_me_prolonger_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAbonnementRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Non membre de l'entreprise du header, ou membre non-admin."
+          },
+          "404": {
+            "description": "Aucune souscription active à prolonger."
+          },
+          "409": {
+            "description": "Le plan gratuit n'expire pas et ne peut pas être prolongé."
           },
           "422": {
             "description": "Validation Error",

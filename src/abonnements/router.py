@@ -50,7 +50,23 @@ async def get_my_subscriptions(
     """
     Récupère les abonnements des entreprises (espaces de travail)
     auxquelles l'utilisateur actuel est rattaché.
+
+    Applique au passage l'expiration paresseuse (lazy) : toute souscription
+    payante échue de ces entreprises est basculée sur le plan gratuit avant la
+    lecture, afin de renvoyer un état à jour.
     """
+    # Réconciliation lazy des entreprises du user (une entreprise jamais
+    # consultée ne verra son expiration qu'au prochain accès — acceptable MVP).
+    entreprise_ids = (
+        await session.exec(
+            select(UtilisateurEntreprise.id_entreprise).where(
+                UtilisateurEntreprise.id_utilisateur == current_user.id
+            )
+        )
+    ).all()
+    for entreprise_id in entreprise_ids:
+        await services.reconcile_expired_subscription(session, entreprise_id)
+
     statement = (
         select(EntrepriseAbonnement)
         .join(
@@ -91,6 +107,36 @@ async def change_my_plan(
     active est clôturée et une nouvelle est créée (historique préservé).
     """
     return await services.change_plan(session, entreprise_id, payload.id_abonnement)
+
+
+@router.post(
+    "/me/prolonger",
+    response_model=EntrepriseAbonnementRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Authentification requise."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Non membre de l'entreprise du header, ou membre non-admin.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Aucune souscription active à prolonger.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Le plan gratuit n'expire pas et ne peut pas être prolongé.",
+        },
+    },
+)
+async def extend_my_plan(
+    entreprise_id: Annotated[int, Depends(require_entreprise_admin)],
+    session: SessionDep,
+) -> Any:
+    """
+    Prolonge d'un mois l'abonnement payant de l'entreprise active (renouvellement
+    manuel, sans paiement pour le MVP).
+
+    Réservé aux administrateurs de l'entreprise (header `x-entreprise-id`). Le
+    plan gratuit n'ayant pas d'échéance, il n'est pas prolongeable (409).
+    """
+    return await services.prolonger_abonnement(session, entreprise_id)
 
 
 @router.post("/", response_model=AbonnementRead, status_code=status.HTTP_201_CREATED)
