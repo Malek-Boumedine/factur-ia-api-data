@@ -83,6 +83,7 @@ async def create_entreprise(
                 id_entreprise=entreprise.id,
             )
         )
+        # Plan gratuit : sans échéance (`date_fin` None) — il n'expire jamais.
         session.add(
             EntrepriseAbonnement(
                 id_entreprise=entreprise.id,

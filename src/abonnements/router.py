@@ -4,14 +4,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.abonnements import services
 from src.abonnements.models import Abonnement, EntrepriseAbonnement
 from src.abonnements.schemas import (
     AbonnementCreate,
     AbonnementRead,
     AbonnementUpdate,
+    ChangementPlanRequest,
     EntrepriseAbonnementRead,
 )
-from src.auth.dependencies import RequirePermission, get_current_user
+from src.auth.dependencies import (
+    get_current_user,
+    require_admin_plateforme,
+    require_entreprise_admin,
+)
 from src.core.database import get_session
 from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
@@ -44,7 +50,23 @@ async def get_my_subscriptions(
     """
     Récupère les abonnements des entreprises (espaces de travail)
     auxquelles l'utilisateur actuel est rattaché.
+
+    Applique au passage l'expiration paresseuse (lazy) : toute souscription
+    payante échue de ces entreprises est basculée sur le plan gratuit avant la
+    lecture, afin de renvoyer un état à jour.
     """
+    # Réconciliation lazy des entreprises du user (une entreprise jamais
+    # consultée ne verra son expiration qu'au prochain accès — acceptable MVP).
+    entreprise_ids = (
+        await session.exec(
+            select(UtilisateurEntreprise.id_entreprise).where(
+                UtilisateurEntreprise.id_utilisateur == current_user.id
+            )
+        )
+    ).all()
+    for entreprise_id in entreprise_ids:
+        await services.reconcile_expired_subscription(session, entreprise_id)
+
     statement = (
         select(EntrepriseAbonnement)
         .join(
@@ -57,10 +79,70 @@ async def get_my_subscriptions(
     return result.all()
 
 
+@router.post(
+    "/me/changer",
+    response_model=EntrepriseAbonnementRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Authentification requise."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Non membre de l'entreprise du header, ou membre non-admin.",
+        },
+        status.HTTP_404_NOT_FOUND: {"description": "Plan cible introuvable."},
+        status.HTTP_409_CONFLICT: {
+            "description": "Déjà sur ce plan, ou trop d'utilisateurs actifs "
+            "pour le plan cible.",
+        },
+    },
+)
+async def change_my_plan(
+    payload: ChangementPlanRequest,
+    entreprise_id: Annotated[int, Depends(require_entreprise_admin)],
+    session: SessionDep,
+) -> Any:
+    """
+    Change le plan d'abonnement de l'entreprise active (header `x-entreprise-id`).
+
+    Réservé aux administrateurs de l'entreprise. L'entreprise ciblée est toujours
+    celle du header — jamais une valeur du corps de la requête. La souscription
+    active est clôturée et une nouvelle est créée (historique préservé).
+    """
+    return await services.change_plan(session, entreprise_id, payload.id_abonnement)
+
+
+@router.post(
+    "/me/prolonger",
+    response_model=EntrepriseAbonnementRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Authentification requise."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Non membre de l'entreprise du header, ou membre non-admin.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Aucune souscription active à prolonger.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Le plan gratuit n'expire pas et ne peut pas être prolongé.",
+        },
+    },
+)
+async def extend_my_plan(
+    entreprise_id: Annotated[int, Depends(require_entreprise_admin)],
+    session: SessionDep,
+) -> Any:
+    """
+    Prolonge d'un mois l'abonnement payant de l'entreprise active (renouvellement
+    manuel, sans paiement pour le MVP).
+
+    Réservé aux administrateurs de l'entreprise (header `x-entreprise-id`). Le
+    plan gratuit n'ayant pas d'échéance, il n'est pas prolongeable (409).
+    """
+    return await services.prolonger_abonnement(session, entreprise_id)
+
+
 @router.post("/", response_model=AbonnementRead, status_code=status.HTTP_201_CREATED)
 async def create_plan(
     plan_in: AbonnementCreate,
-    _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
+    _: Annotated[Utilisateur, Depends(require_admin_plateforme)],
     session: SessionDep,
 ) -> Any:
     """
@@ -78,7 +160,7 @@ async def create_plan(
 async def update_plan(
     abonnement_id: int,
     plan_in: AbonnementUpdate,
-    _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
+    _: Annotated[Utilisateur, Depends(require_admin_plateforme)],
     session: SessionDep,
 ) -> Any:
     """
@@ -99,19 +181,23 @@ async def update_plan(
     return db_plan
 
 
-@router.delete("/{abonnement_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{abonnement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": "Plan encore souscrit par au moins une entreprise.",
+        }
+    },
+)
 async def delete_plan(
     abonnement_id: int,
-    _: Annotated[Utilisateur, Depends(RequirePermission("platform:manage"))],
+    _: Annotated[Utilisateur, Depends(require_admin_plateforme)],
     session: SessionDep,
 ) -> None:
     """
-    Supprime un plan d'abonnement.
-    Réservé aux administrateurs de la plateforme.
-    """
-    db_plan = await session.get(Abonnement, abonnement_id)
-    if not db_plan:
-        raise HTTPException(status_code=404, detail="Plan d'abonnement introuvable")
+    Supprime un plan d'abonnement. Réservé aux administrateurs de la plateforme.
 
-    await session.delete(db_plan)
-    await session.commit()
+    Renvoie 409 si le plan est encore souscrit par des entreprises.
+    """
+    await services.delete_plan(session, abonnement_id)
