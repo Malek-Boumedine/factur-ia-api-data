@@ -4975,6 +4975,12 @@
             "description": "Statut administrateur global de la plateforme (lecture seule).",
             "default": false
           },
+          "compte_protege": {
+            "type": "boolean",
+            "title": "Compte Protege",
+            "description": "Compte racine protégé : indestructible et non révocable. Lecture seule : à utiliser pour masquer préventivement l'action de suppression.",
+            "default": false
+          },
           "role": {
             "anyOf": [
               {

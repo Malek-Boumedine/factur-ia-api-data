@@ -50,6 +50,13 @@ class UtilisateurRead(UtilisateurBase):
         default=False,
         description="Statut administrateur global de la plateforme (lecture seule).",
     )
+    compte_protege: bool = Field(
+        default=False,
+        description=(
+            "Compte racine protégé : indestructible et non révocable. Lecture "
+            "seule : à utiliser pour masquer préventivement l'action de suppression."
+        ),
+    )
     role: str | None = None
     est_admin: bool | None = Field(
         default=None,
