@@ -93,6 +93,51 @@ async def verify_tenant_access(
     return x_entreprise_id
 
 
+async def require_entreprise_admin(
+    x_entreprise_id: Annotated[
+        int,
+        Header(
+            title="ID de l'entreprise",
+            description="Identifiant de l'entreprise (tenant) \
+                actif transmis dans les en-têtes.",
+        ),
+    ],
+    current_user: Annotated[Utilisateur, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> int:
+    """
+    Garde-fou pour les actions sensibles au niveau d'une entreprise (tenant).
+
+    Reprend le contrôle d'appartenance de ``verify_tenant_access`` (même requête
+    sur ``UtilisateurEntreprise``) et exige en plus le flag ``est_admin`` : seul
+    un administrateur de l'entreprise active peut poursuivre. Renvoie 403 si
+    l'utilisateur n'appartient pas à l'entreprise, ou s'il en est un membre
+    non-admin. Réutilisable pour d'autres opérations d'administration métier.
+    """
+    statement = (
+        select(UtilisateurEntreprise)
+        .where(UtilisateurEntreprise.id_utilisateur == current_user.id)
+        .where(UtilisateurEntreprise.id_entreprise == x_entreprise_id)
+    )
+
+    result = await session.exec(statement)
+    lien_entreprise = result.first()
+
+    if not lien_entreprise:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé. Vous n'appartenez pas à cette entreprise.",
+        )
+
+    if not lien_entreprise.est_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Action réservée aux administrateurs de l'entreprise.",
+        )
+
+    return x_entreprise_id
+
+
 # gestion RBAC
 class RequirePermission:
     """

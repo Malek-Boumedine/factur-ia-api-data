@@ -10,9 +10,14 @@ from src.abonnements.schemas import (
     AbonnementCreate,
     AbonnementRead,
     AbonnementUpdate,
+    ChangementPlanRequest,
     EntrepriseAbonnementRead,
 )
-from src.auth.dependencies import get_current_user, require_admin_plateforme
+from src.auth.dependencies import (
+    get_current_user,
+    require_admin_plateforme,
+    require_entreprise_admin,
+)
 from src.core.database import get_session
 from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
@@ -56,6 +61,36 @@ async def get_my_subscriptions(
     )
     result = await session.exec(statement)
     return result.all()
+
+
+@router.post(
+    "/me/changer",
+    response_model=EntrepriseAbonnementRead,
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Authentification requise."},
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Non membre de l'entreprise du header, ou membre non-admin.",
+        },
+        status.HTTP_404_NOT_FOUND: {"description": "Plan cible introuvable."},
+        status.HTTP_409_CONFLICT: {
+            "description": "Déjà sur ce plan, ou trop d'utilisateurs actifs "
+            "pour le plan cible.",
+        },
+    },
+)
+async def change_my_plan(
+    payload: ChangementPlanRequest,
+    entreprise_id: Annotated[int, Depends(require_entreprise_admin)],
+    session: SessionDep,
+) -> Any:
+    """
+    Change le plan d'abonnement de l'entreprise active (header `x-entreprise-id`).
+
+    Réservé aux administrateurs de l'entreprise. L'entreprise ciblée est toujours
+    celle du header — jamais une valeur du corps de la requête. La souscription
+    active est clôturée et une nouvelle est créée (historique préservé).
+    """
+    return await services.change_plan(session, entreprise_id, payload.id_abonnement)
 
 
 @router.post("/", response_model=AbonnementRead, status_code=status.HTTP_201_CREATED)
