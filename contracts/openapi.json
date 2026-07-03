@@ -839,8 +839,33 @@
           "Gestion des Utilisateurs"
         ],
         "summary": "Get My Profile",
-        "description": "Récupère le profil de l'utilisateur actuellement connecté.",
+        "description": "Récupère le profil de l'utilisateur actuellement connecté.\n\nLe header `x-entreprise-id` est optionnel : absent (ex. utilisateur sans\nentreprise ou juste après login), le profil brut est renvoyé et `est_admin`\nreste nul. Présent, le profil est enrichi de `est_admin`/`role` dans le\ncontexte de cette entreprise — uniquement si l'utilisateur en est membre\n(aucune usurpation possible sinon).",
         "operationId": "get_my_profile_utilisateurs_me_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant) active. Optionnel : s'il est fourni et que l'utilisateur y appartient, `est_admin` et `role` sont renseignés pour cette entreprise ; sinon ils restent nuls."
+            },
+            "description": "Identifiant de l'entreprise (tenant) active. Optionnel : s'il est fourni et que l'utilisateur y appartient, `est_admin` et `role` sont renseignés pour cette entreprise ; sinon ils restent nuls."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -851,13 +876,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       },
       "patch": {
         "tags": [
@@ -866,15 +896,20 @@
         "summary": "Update My Profile",
         "description": "Permet à l'utilisateur de modifier ses propres informations personnelles.",
         "operationId": "update_my_profile_utilisateurs_me_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UtilisateurUpdate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -897,12 +932,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/utilisateurs/": {

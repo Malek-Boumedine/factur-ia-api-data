@@ -1,6 +1,6 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import and_, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -64,11 +64,29 @@ async def _membre_read_dict(
 @router.get("/me", response_model=UtilisateurRead)
 async def get_my_profile(
     current_user: Annotated[Utilisateur, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    x_entreprise_id: Annotated[
+        int | None,
+        Header(
+            title="ID de l'entreprise",
+            description="Identifiant de l'entreprise (tenant) active. Optionnel : "
+            "s'il est fourni et que l'utilisateur y appartient, `est_admin` et "
+            "`role` sont renseignés pour cette entreprise ; sinon ils restent nuls.",
+        ),
+    ] = None,
 ) -> Any:
     """
     Récupère le profil de l'utilisateur actuellement connecté.
+
+    Le header `x-entreprise-id` est optionnel : absent (ex. utilisateur sans
+    entreprise ou juste après login), le profil brut est renvoyé et `est_admin`
+    reste nul. Présent, le profil est enrichi de `est_admin`/`role` dans le
+    contexte de cette entreprise — uniquement si l'utilisateur en est membre
+    (aucune usurpation possible sinon).
     """
-    return current_user
+    if x_entreprise_id is None:
+        return current_user
+    return await _membre_read_dict(session, current_user, x_entreprise_id)
 
 
 @router.patch("/me", response_model=UtilisateurRead)
