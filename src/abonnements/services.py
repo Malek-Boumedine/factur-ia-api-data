@@ -198,6 +198,39 @@ async def _count_active_users(session: AsyncSession, entreprise_id: int) -> int:
     ).one()
 
 
+async def ensure_can_add_active_user(session: AsyncSession, entreprise_id: int) -> None:
+    """
+    Garde-fou : refuse (409) l'ajout d'un utilisateur actif de plus si
+    l'entreprise atteint déjà la limite `nombre_max_utilisateurs` de son plan
+    actif. Couvre à la fois la création et la réactivation d'un membre (dans les
+    deux cas on ajoute un actif à l'effectif courant).
+
+    Applique d'abord l'expiration paresseuse pour évaluer le plan *réellement*
+    actif (un plan payant échu compte comme le plan gratuit). Ne désactive
+    jamais de compte et ne bloque jamais l'expiration : un sur-effectif hérité
+    d'une expiration reste un état valide, on empêche seulement de l'aggraver.
+
+    Absence de plan actif (état anormal) : on tolère, aucun blocage.
+    """
+    active = await reconcile_expired_subscription(session, entreprise_id)
+    if active is None:
+        return
+    plan = await session.get(Abonnement, active.id_abonnement)
+    if plan is None:
+        return
+
+    nombre_utilisateurs = await _count_active_users(session, entreprise_id)
+    if nombre_utilisateurs >= plan.nombre_max_utilisateurs:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Votre plan est limité à {plan.nombre_max_utilisateurs} "
+                "utilisateur(s). Passez à un plan supérieur pour en ajouter "
+                "davantage."
+            ),
+        )
+
+
 async def change_plan(
     session: AsyncSession, entreprise_id: int, id_abonnement: int
 ) -> EntrepriseAbonnement:

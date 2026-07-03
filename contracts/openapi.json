@@ -1055,7 +1055,7 @@
           "Gestion des Utilisateurs"
         ],
         "summary": "Create Team Member",
-        "description": "Crée un nouvel utilisateur et le rattache automatiquement à l'entreprise actuelle.",
+        "description": "Crée un nouvel utilisateur et le rattache automatiquement à l'entreprise actuelle.\n\nRefuse la création (409) si l'entreprise atteint déjà la limite\nd'utilisateurs de son plan actif — sans jamais toucher aux comptes existants.",
         "operationId": "create_team_member_utilisateurs__post",
         "security": [
           {
@@ -1095,6 +1095,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "La limite d'utilisateurs du plan actif est atteinte."
           },
           "422": {
             "description": "Validation Error",
@@ -1206,7 +1209,7 @@
           "Gestion des Utilisateurs"
         ],
         "summary": "Update Team Member",
-        "description": "Modifie les informations d'un\ncollaborateur (incluant ses rôles et accès admin).",
+        "description": "Modifie les informations d'un\ncollaborateur (incluant ses rôles et accès admin).\n\nRéactiver un membre (`est_actif` False -> True) est refusé en 409 si\nl'entreprise est déjà à la limite d'utilisateurs de son plan actif. La\ndésactivation et les autres modifications restent toujours autorisées.",
         "operationId": "update_team_member_utilisateurs__user_id__patch",
         "security": [
           {
@@ -1255,6 +1258,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Réactivation refusée : limite d'utilisateurs du plan actif atteinte."
           },
           "422": {
             "description": "Validation Error",

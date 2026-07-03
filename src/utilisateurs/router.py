@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import and_, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.abonnements import services as abonnements_services
 from src.auth.dependencies import (
     RequirePermission,
     get_current_user,
@@ -148,7 +149,16 @@ async def list_team_members(
     return membres
 
 
-@router.post("/", response_model=UtilisateurRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=UtilisateurRead,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": "La limite d'utilisateurs du plan actif est atteinte.",
+        },
+    },
+)
 async def create_team_member(
     user_in: UtilisateurCreate,
     entreprise_id: Annotated[int, Depends(verify_tenant_access)],
@@ -157,8 +167,14 @@ async def create_team_member(
 ) -> Any:
     """
     Crée un nouvel utilisateur et le rattache automatiquement à l'entreprise actuelle.
+
+    Refuse la création (409) si l'entreprise atteint déjà la limite
+    d'utilisateurs de son plan actif — sans jamais toucher aux comptes existants.
     """
-    # 1. Vérification email...
+    # 1. Garde-fou : ne pas dépasser la limite du plan actif (ajout d'un actif).
+    await abonnements_services.ensure_can_add_active_user(session, entreprise_id)
+
+    # 2. Vérification email...
     statement = select(Utilisateur).where(Utilisateur.email == user_in.email)
     existing_user_result = await session.exec(statement)
     if existing_user_result.first():
@@ -247,7 +263,16 @@ async def delete_team_member(
     return None
 
 
-@router.patch("/{user_id}", response_model=UtilisateurRead)
+@router.patch(
+    "/{user_id}",
+    response_model=UtilisateurRead,
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": "Réactivation refusée : limite d'utilisateurs du plan "
+            "actif atteinte.",
+        },
+    },
+)
 async def update_team_member(
     user_id: int,
     user_in: UtilisateurTeamUpdate,
@@ -256,7 +281,12 @@ async def update_team_member(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Any:
     """Modifie les informations d'un
-    collaborateur (incluant ses rôles et accès admin)."""
+    collaborateur (incluant ses rôles et accès admin).
+
+    Réactiver un membre (`est_actif` False -> True) est refusé en 409 si
+    l'entreprise est déjà à la limite d'utilisateurs de son plan actif. La
+    désactivation et les autres modifications restent toujours autorisées.
+    """
 
     # 1. Vérifier que l'utilisateur existe et appartient bien à l'entreprise
     statement = (
@@ -272,6 +302,14 @@ async def update_team_member(
         raise HTTPException(
             status_code=404, detail="Utilisateur introuvable dans cette entreprise."
         )
+
+    # 1bis. Garde-fou réactivation (est_actif False -> True) : évaluer la limite
+    # AVANT toute mutation de db_user, car la réconciliation interne du garde-fou
+    # peut committer (bascule vers le gratuit) et persisterait des changements
+    # partiels sinon.
+    est_reactivation = user_in.est_actif is True and not db_user.est_actif
+    if est_reactivation:
+        await abonnements_services.ensure_can_add_active_user(session, entreprise_id)
 
     # 2. Mise à jour dynamique des infos de base de l'utilisateur
     # On exclut les champs qui ne sont pas dans la table 'utilisateur'
