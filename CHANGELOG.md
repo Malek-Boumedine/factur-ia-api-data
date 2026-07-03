@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-07-03)
+
+### Features
+
+- **abonnements**: Rend GET /abonnements/ public pour l'affichage des tarifs
+  ([`f256401`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/f2564010f988615fe1f31e3780b89d38ffe08cc5))
+
+- **utilisateurs**: Endpoint de changement d'email (utilisateur connecté)
+  ([`1c56cd2`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/1c56cd220c927e5927be727f04835e19c02f5149))
+
+- **utilisateurs**: Endpoint de changement de mot de passe (utilisateur connecté)
+  ([`6f0c406`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/6f0c4063b4b2ed9dcdf08c7c74825b222d324c1a))
+
+### Refactoring
+
+- **utilisateurs**: Restreint les champs modifiables via PATCH /me
+  ([`5b3940a`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/5b3940a8ac5bd05bc08a330fc97b7fcf247aae7e))
+
+
 ## v1.6.0 (2026-07-03)
 
 ### Bug Fixes
