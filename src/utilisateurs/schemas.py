@@ -46,6 +46,17 @@ class UtilisateurRead(UtilisateurBase):
     date_creation: datetime
     date_modification: datetime
     date_derniere_connexion: datetime | None = None
+    admin_plateforme: bool = Field(
+        default=False,
+        description="Statut administrateur global de la plateforme (lecture seule).",
+    )
+    compte_protege: bool = Field(
+        default=False,
+        description=(
+            "Compte racine protégé : indestructible et non révocable. Lecture "
+            "seule : à utiliser pour masquer préventivement l'action de suppression."
+        ),
+    )
     role: str | None = None
     est_admin: bool | None = Field(
         default=None,
@@ -55,6 +66,26 @@ class UtilisateurRead(UtilisateurBase):
             "et éviter de retirer les droits par erreur."
         ),
     )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminPlateformeRead(BaseModel):
+    """
+    Schéma de lecture d'un administrateur de plateforme.
+
+    Volontairement distinct de `UtilisateurRead` : ne contient que les champs
+    globaux (pas de `role`/`est_admin`, qui dépendent d'une entreprise).
+    """
+
+    id: int
+    nom: str
+    prenom: str
+    email: EmailStr
+    est_actif: bool
+    admin_plateforme: bool
+    compte_protege: bool
+    date_creation: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "paths": {
     "/auth/token": {
@@ -465,7 +465,7 @@
           "Ecosystème Client"
         ],
         "summary": "Delete Client",
-        "description": "Supprime définitivement un client appartenant à l'entreprise active.",
+        "description": "Désactive un client (soft delete) de l'entreprise active.\n\nOn ne supprime jamais physiquement un client : des factures peuvent le\nréférencer (intégrité + conservation légale). L'opération est idempotente ;\nla réactivation se fait via PATCH avec `est_actif=true`.",
         "operationId": "delete_client_clients__client_id__delete",
         "security": [
           {
@@ -636,7 +636,7 @@
           "Gestion des Abonnements"
         ],
         "summary": "Get My Subscriptions",
-        "description": "Récupère les abonnements des entreprises (espaces de travail)\nauxquelles l'utilisateur actuel est rattaché.",
+        "description": "Récupère les abonnements des entreprises (espaces de travail)\nauxquelles l'utilisateur actuel est rattaché.\n\nApplique au passage l'expiration paresseuse (lazy) : toute souscription\npayante échue de ces entreprises est basculée sur le plan gratuit avant la\nlecture, afin de renvoyer un état à jour.",
         "operationId": "get_my_subscriptions_abonnements_me_get",
         "responses": {
           "200": {
@@ -659,6 +659,140 @@
             "OAuth2PasswordBearer": []
           }
         ]
+      }
+    },
+    "/abonnements/me/changer": {
+      "post": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "Change My Plan",
+        "description": "Change le plan d'abonnement de l'entreprise active (header `x-entreprise-id`).\n\nRéservé aux administrateurs de l'entreprise. L'entreprise ciblée est toujours\ncelle du header — jamais une valeur du corps de la requête. La souscription\nactive est clôturée et une nouvelle est créée (historique préservé).",
+        "operationId": "change_my_plan_abonnements_me_changer_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangementPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAbonnementRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Non membre de l'entreprise du header, ou membre non-admin."
+          },
+          "404": {
+            "description": "Plan cible introuvable."
+          },
+          "409": {
+            "description": "Déjà sur ce plan, ou trop d'utilisateurs actifs pour le plan cible."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/abonnements/me/prolonger": {
+      "post": {
+        "tags": [
+          "Gestion des Abonnements"
+        ],
+        "summary": "Extend My Plan",
+        "description": "Prolonge d'un mois l'abonnement payant de l'entreprise active (renouvellement\nmanuel, sans paiement pour le MVP).\n\nRéservé aux administrateurs de l'entreprise (header `x-entreprise-id`). Le\nplan gratuit n'ayant pas d'échéance, il n'est pas prolongeable (409).",
+        "operationId": "extend_my_plan_abonnements_me_prolonger_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAbonnementRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Non membre de l'entreprise du header, ou membre non-admin."
+          },
+          "404": {
+            "description": "Aucune souscription active à prolonger."
+          },
+          "409": {
+            "description": "Le plan gratuit n'expire pas et ne peut pas être prolongé."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/abonnements/{abonnement_id}": {
@@ -723,7 +857,7 @@
           "Gestion des Abonnements"
         ],
         "summary": "Delete Plan",
-        "description": "Supprime un plan d'abonnement.\nRéservé aux administrateurs de la plateforme.",
+        "description": "Supprime un plan d'abonnement. Réservé aux administrateurs de la plateforme.\n\nRenvoie 409 si le plan est encore souscrit par des entreprises.",
         "operationId": "delete_plan_abonnements__abonnement_id__delete",
         "security": [
           {
@@ -745,6 +879,9 @@
           "204": {
             "description": "Successful Response"
           },
+          "409": {
+            "description": "Plan encore souscrit par au moins une entreprise."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -764,8 +901,33 @@
           "Gestion des Utilisateurs"
         ],
         "summary": "Get My Profile",
-        "description": "Récupère le profil de l'utilisateur actuellement connecté.",
+        "description": "Récupère le profil de l'utilisateur actuellement connecté.\n\nLe header `x-entreprise-id` est optionnel : absent (ex. utilisateur sans\nentreprise ou juste après login), le profil brut est renvoyé et `est_admin`\nreste nul. Présent, le profil est enrichi de `est_admin`/`role` dans le\ncontexte de cette entreprise — uniquement si l'utilisateur en est membre\n(aucune usurpation possible sinon).",
         "operationId": "get_my_profile_utilisateurs_me_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant) active. Optionnel : s'il est fourni et que l'utilisateur y appartient, `est_admin` et `role` sont renseignés pour cette entreprise ; sinon ils restent nuls."
+            },
+            "description": "Identifiant de l'entreprise (tenant) active. Optionnel : s'il est fourni et que l'utilisateur y appartient, `est_admin` et `role` sont renseignés pour cette entreprise ; sinon ils restent nuls."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -776,13 +938,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       },
       "patch": {
         "tags": [
@@ -791,15 +958,20 @@
         "summary": "Update My Profile",
         "description": "Permet à l'utilisateur de modifier ses propres informations personnelles.",
         "operationId": "update_my_profile_utilisateurs_me_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UtilisateurUpdate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -822,12 +994,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/utilisateurs/": {
@@ -888,7 +1055,7 @@
           "Gestion des Utilisateurs"
         ],
         "summary": "Create Team Member",
-        "description": "Crée un nouvel utilisateur et le rattache automatiquement à l'entreprise actuelle.",
+        "description": "Crée un nouvel utilisateur et le rattache automatiquement à l'entreprise actuelle.\n\nRefuse la création (409) si l'entreprise atteint déjà la limite\nd'utilisateurs de son plan actif — sans jamais toucher aux comptes existants.",
         "operationId": "create_team_member_utilisateurs__post",
         "security": [
           {
@@ -928,6 +1095,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "La limite d'utilisateurs du plan actif est atteinte."
           },
           "422": {
             "description": "Validation Error",
@@ -1039,7 +1209,7 @@
           "Gestion des Utilisateurs"
         ],
         "summary": "Update Team Member",
-        "description": "Modifie les informations d'un\ncollaborateur (incluant ses rôles et accès admin).",
+        "description": "Modifie les informations d'un\ncollaborateur (incluant ses rôles et accès admin).\n\nRéactiver un membre (`est_actif` False -> True) est refusé en 409 si\nl'entreprise est déjà à la limite d'utilisateurs de son plan actif. La\ndésactivation et les autres modifications restent toujours autorisées.",
         "operationId": "update_team_member_utilisateurs__user_id__patch",
         "security": [
           {
@@ -1088,6 +1258,440 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Réactivation refusée : limite d'utilisateurs du plan actif atteinte."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admins-plateforme/": {
+      "get": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "List Admins",
+        "description": "Liste les administrateurs de la plateforme.",
+        "operationId": "list_admins_admins_plateforme__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminPlateformeRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Admins Admins Plateforme  Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/admins-plateforme/recherche-utilisateur": {
+      "get": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Search User",
+        "description": "Recherche des utilisateurs par email pour désigner un candidat à la\npromotion. Réservé aux admins plateforme, sans périmètre d'entreprise.",
+        "operationId": "search_user_admins_plateforme_recherche_utilisateur_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "description": "Fragment d'email à rechercher (partiel, insensible à la casse).",
+              "title": "Email"
+            },
+            "description": "Fragment d'email à rechercher (partiel, insensible à la casse)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminPlateformeRead"
+                  },
+                  "title": "Response Search User Admins Plateforme Recherche Utilisateur Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admins-plateforme/{utilisateur_id}/promouvoir": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Promote Admin",
+        "description": "Promeut un utilisateur au rang d'administrateur de plateforme.\nNe modifie que le statut plateforme, jamais les rôles métier.",
+        "operationId": "promote_admin_admins_plateforme__utilisateur_id__promouvoir_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPlateformeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admins-plateforme/{utilisateur_id}/revoquer": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Revoke Admin",
+        "description": "Révoque le statut d'administrateur de plateforme d'un utilisateur.\nLe compte reste inchangé par ailleurs (rôles, entreprises, existence).",
+        "operationId": "revoke_admin_admins_plateforme__utilisateur_id__revoquer_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPlateformeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/taux-tva/": {
+      "get": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "List Taux",
+        "description": "Liste les taux de TVA de la plateforme (référentiel global).\nAccessible à tout utilisateur authentifié, sans périmètre d'entreprise.",
+        "operationId": "list_taux_taux_tva__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif (optionnel).",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif (optionnel)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TauxTvaRead"
+                  },
+                  "title": "Response List Taux Taux Tva  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Create Taux",
+        "description": "Crée un nouveau taux de TVA. Réservé aux administrateurs de la\nplateforme. Renvoie une 409 si la valeur du taux existe déjà.",
+        "operationId": "create_taux_taux_tva__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TauxTvaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TauxTvaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/taux-tva/{taux_tva_id}": {
+      "get": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Get Taux",
+        "description": "Récupère le détail d'un taux de TVA.",
+        "operationId": "get_taux_taux_tva__taux_tva_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taux_tva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Taux Tva Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TauxTvaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Update Taux",
+        "description": "Modifie partiellement un taux de TVA (dont réactivation via\n`est_actif=true`). Réservé aux administrateurs de la plateforme.",
+        "operationId": "update_taux_taux_tva__taux_tva_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taux_tva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Taux Tva Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TauxTvaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TauxTvaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Taux de TVA"
+        ],
+        "summary": "Deactivate Taux",
+        "description": "Désactive un taux de TVA (soft delete, jamais de suppression physique :\ndes factures inaltérables le référencent). Réservé aux administrateurs\nde la plateforme.",
+        "operationId": "deactivate_taux_taux_tva__taux_tva_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "taux_tva_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Taux Tva Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -2028,6 +2632,57 @@
         "title": "AbonnementUpdate",
         "description": "Schéma pour la modification d'un plan (Admin uniquement)."
       },
+      "AdminPlateformeRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom": {
+            "type": "string",
+            "title": "Nom"
+          },
+          "prenom": {
+            "type": "string",
+            "title": "Prenom"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif"
+          },
+          "admin_plateforme": {
+            "type": "boolean",
+            "title": "Admin Plateforme"
+          },
+          "compte_protege": {
+            "type": "boolean",
+            "title": "Compte Protege"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom",
+          "prenom",
+          "email",
+          "est_actif",
+          "admin_plateforme",
+          "compte_protege",
+          "date_creation"
+        ],
+        "title": "AdminPlateformeRead",
+        "description": "Schéma de lecture d'un administrateur de plateforme.\n\nVolontairement distinct de `UtilisateurRead` : ne contient que les champs\nglobaux (pas de `role`/`est_admin`, qui dépendent d'une entreprise)."
+      },
       "Body_login": {
         "properties": {
           "grant_type": {
@@ -2360,6 +3015,21 @@
         "type": "object",
         "title": "CatalogueUpdate",
         "description": "Schéma pour la mise à jour partielle d'un produit (PATCH).\nTous les champs sont optionnels pour permettre\nde ne modifier qu'une ou plusieurs valeurs."
+      },
+      "ChangementPlanRequest": {
+        "properties": {
+          "id_abonnement": {
+            "type": "integer",
+            "title": "Id Abonnement",
+            "description": "Identifiant du plan d'abonnement cible."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_abonnement"
+        ],
+        "title": "ChangementPlanRequest",
+        "description": "Requête de changement de plan pour l'entreprise active (via header)."
       },
       "ClientCreate": {
         "properties": {
@@ -3903,6 +4573,163 @@
         ],
         "title": "StatutSouscription"
       },
+      "TauxTvaCreate": {
+        "properties": {
+          "taux": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Taux",
+            "description": "Valeur du taux en pourcentage (ex : 20.00). Unique."
+          },
+          "libelle": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Libelle",
+            "description": "Libellé affiché (ex : Taux normal)"
+          },
+          "code_comptable": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Comptable",
+            "description": "Code comptable associé (optionnel)"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si le taux est proposé pour de nouvelles saisies",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "taux",
+          "libelle"
+        ],
+        "title": "TauxTvaCreate",
+        "description": "Schéma de création d'un taux de TVA (admin plateforme uniquement)."
+      },
+      "TauxTvaRead": {
+        "properties": {
+          "taux": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Taux",
+            "description": "Valeur du taux en pourcentage (ex : 20.00). Unique."
+          },
+          "libelle": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Libelle",
+            "description": "Libellé affiché (ex : Taux normal)"
+          },
+          "code_comptable": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Comptable",
+            "description": "Code comptable associé (optionnel)"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si le taux est proposé pour de nouvelles saisies",
+            "default": true
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "taux",
+          "libelle",
+          "id"
+        ],
+        "title": "TauxTvaRead",
+        "description": "Schéma de lecture d'un taux de TVA."
+      },
+      "TauxTvaUpdate": {
+        "properties": {
+          "taux": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taux"
+          },
+          "libelle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle"
+          },
+          "code_comptable": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Comptable"
+          },
+          "est_actif": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Est Actif"
+          }
+        },
+        "type": "object",
+        "title": "TauxTvaUpdate",
+        "description": "Schéma de mise à jour partielle d'un taux de TVA (PATCH).\nTous les champs sont optionnels ; `est_actif=true` permet de réactiver\nun taux désactivé."
+      },
       "TypeFacture": {
         "type": "string",
         "enum": [
@@ -4141,6 +4968,18 @@
               }
             ],
             "title": "Date Derniere Connexion"
+          },
+          "admin_plateforme": {
+            "type": "boolean",
+            "title": "Admin Plateforme",
+            "description": "Statut administrateur global de la plateforme (lecture seule).",
+            "default": false
+          },
+          "compte_protege": {
+            "type": "boolean",
+            "title": "Compte Protege",
+            "description": "Compte racine protégé : indestructible et non révocable. Lecture seule : à utiliser pour masquer préventivement l'action de suppression.",
+            "default": false
           },
           "role": {
             "anyOf": [

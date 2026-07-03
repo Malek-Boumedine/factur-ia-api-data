@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-07-02)
+
+### Bug Fixes
+
+- **clients**: Peuple date_modification à l'insert pour clients et catalogue
+  ([`93490ba`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/93490ba305eab9b61985e76fdd658492c9ff6fb1))
+
+### Features
+
+- **api**: Recherche, filtres et pagination sur les endpoints de liste
+  ([`c5ecf60`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/c5ecf60ef7ae5f9a3a04bea3bf3bf019e51343bf))
+
+- **auth**: Flux de réinitialisation de mot de passe
+  ([`a5bd3e8`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/a5bd3e82b73df87b125ee1d70313a1b66907a28b))
+
+- **entreprises**: Endpoint d'onboarding pour créer son premier espace de travail
+  ([`d5bb0b5`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/d5bb0b55ea2236856be4392771f596af3f37884f))
+
+
 ## v1.4.0 (2026-06-30)
 
 ### Bug Fixes

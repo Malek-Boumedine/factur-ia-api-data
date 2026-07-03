@@ -1,9 +1,10 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import and_, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.abonnements import services as abonnements_services
 from src.auth.dependencies import (
     RequirePermission,
     get_current_user,
@@ -64,11 +65,29 @@ async def _membre_read_dict(
 @router.get("/me", response_model=UtilisateurRead)
 async def get_my_profile(
     current_user: Annotated[Utilisateur, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    x_entreprise_id: Annotated[
+        int | None,
+        Header(
+            title="ID de l'entreprise",
+            description="Identifiant de l'entreprise (tenant) active. Optionnel : "
+            "s'il est fourni et que l'utilisateur y appartient, `est_admin` et "
+            "`role` sont renseignés pour cette entreprise ; sinon ils restent nuls.",
+        ),
+    ] = None,
 ) -> Any:
     """
     Récupère le profil de l'utilisateur actuellement connecté.
+
+    Le header `x-entreprise-id` est optionnel : absent (ex. utilisateur sans
+    entreprise ou juste après login), le profil brut est renvoyé et `est_admin`
+    reste nul. Présent, le profil est enrichi de `est_admin`/`role` dans le
+    contexte de cette entreprise — uniquement si l'utilisateur en est membre
+    (aucune usurpation possible sinon).
     """
-    return current_user
+    if x_entreprise_id is None:
+        return current_user
+    return await _membre_read_dict(session, current_user, x_entreprise_id)
 
 
 @router.patch("/me", response_model=UtilisateurRead)
@@ -130,7 +149,16 @@ async def list_team_members(
     return membres
 
 
-@router.post("/", response_model=UtilisateurRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=UtilisateurRead,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": "La limite d'utilisateurs du plan actif est atteinte.",
+        },
+    },
+)
 async def create_team_member(
     user_in: UtilisateurCreate,
     entreprise_id: Annotated[int, Depends(verify_tenant_access)],
@@ -139,8 +167,14 @@ async def create_team_member(
 ) -> Any:
     """
     Crée un nouvel utilisateur et le rattache automatiquement à l'entreprise actuelle.
+
+    Refuse la création (409) si l'entreprise atteint déjà la limite
+    d'utilisateurs de son plan actif — sans jamais toucher aux comptes existants.
     """
-    # 1. Vérification email...
+    # 1. Garde-fou : ne pas dépasser la limite du plan actif (ajout d'un actif).
+    await abonnements_services.ensure_can_add_active_user(session, entreprise_id)
+
+    # 2. Vérification email...
     statement = select(Utilisateur).where(Utilisateur.email == user_in.email)
     existing_user_result = await session.exec(statement)
     if existing_user_result.first():
@@ -214,6 +248,13 @@ async def delete_team_member(
     if not db_user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable.")
 
+    # Le compte racine protégé n'est supprimable par personne.
+    if db_user.compte_protege:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ce compte est protégé et ne peut pas être supprimé.",
+        )
+
     # 2. Comme on a mis ondelete="CASCADE" dans les modèles,
     # supprimer l'utilisateur supprimera automatiquement les lignes
     # dans UtilisateurRole et UtilisateurEntreprise.
@@ -222,7 +263,16 @@ async def delete_team_member(
     return None
 
 
-@router.patch("/{user_id}", response_model=UtilisateurRead)
+@router.patch(
+    "/{user_id}",
+    response_model=UtilisateurRead,
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "description": "Réactivation refusée : limite d'utilisateurs du plan "
+            "actif atteinte.",
+        },
+    },
+)
 async def update_team_member(
     user_id: int,
     user_in: UtilisateurTeamUpdate,
@@ -231,7 +281,12 @@ async def update_team_member(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Any:
     """Modifie les informations d'un
-    collaborateur (incluant ses rôles et accès admin)."""
+    collaborateur (incluant ses rôles et accès admin).
+
+    Réactiver un membre (`est_actif` False -> True) est refusé en 409 si
+    l'entreprise est déjà à la limite d'utilisateurs de son plan actif. La
+    désactivation et les autres modifications restent toujours autorisées.
+    """
 
     # 1. Vérifier que l'utilisateur existe et appartient bien à l'entreprise
     statement = (
@@ -247,6 +302,14 @@ async def update_team_member(
         raise HTTPException(
             status_code=404, detail="Utilisateur introuvable dans cette entreprise."
         )
+
+    # 1bis. Garde-fou réactivation (est_actif False -> True) : évaluer la limite
+    # AVANT toute mutation de db_user, car la réconciliation interne du garde-fou
+    # peut committer (bascule vers le gratuit) et persisterait des changements
+    # partiels sinon.
+    est_reactivation = user_in.est_actif is True and not db_user.est_actif
+    if est_reactivation:
+        await abonnements_services.ensure_can_add_active_user(session, entreprise_id)
 
     # 2. Mise à jour dynamique des infos de base de l'utilisateur
     # On exclut les champs qui ne sont pas dans la table 'utilisateur'

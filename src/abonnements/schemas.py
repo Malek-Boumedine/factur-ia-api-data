@@ -43,6 +43,14 @@ class AbonnementRead(AbonnementBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ChangementPlanRequest(BaseModel):
+    """Requête de changement de plan pour l'entreprise active (via header)."""
+
+    id_abonnement: int = Field(
+        ..., description="Identifiant du plan d'abonnement cible."
+    )
+
+
 # schémas pour la liaison Entreprise/Abonnement
 class EntrepriseAbonnementRead(BaseModel):
     """
