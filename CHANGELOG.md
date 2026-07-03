@@ -2,6 +2,55 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-07-03)
+
+### Bug Fixes
+
+- **abonnements**: Renvoie 409 au lieu de supprimer un plan encore souscrit
+  ([`26fbef2`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/26fbef203f505287e422feb971ff3cba5f303588))
+
+- **auth**: Scope la vérification RBAC à l'entreprise active
+  ([`0f26e4e`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/0f26e4e1feb9987ef66050eaf51520d391797a8d))
+
+- **clients**: Désactivation autorisée et 409 sur doublon SIRET/TVA
+  ([`6d1a4f2`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/6d1a4f20bb30e4e522ee23e516a0b5f3e8410cde))
+
+- **seeds**: Modification du script de seed pour insérer uniquement les données manquantes et éviter
+  les erreurs
+  ([`3ce386c`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/3ce386cdb72956dcbc6c2533e300b8b910ff2ace))
+
+### Features
+
+- **abonnements**: Changement de plan de l'entreprise active
+  ([`36d6105`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/36d6105808b9141c99eaf01f596bbc84a7a38148))
+
+- **abonnements**: Expiration paresseuse et prolongation des abonnements
+  ([`c3844d3`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/c3844d3c237daa348bb30014237580b88df0c267))
+
+- **auth**: Administrateur de plateforme et compte racine protégé
+  ([`31f97aa`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/31f97aaba33c747392ad9830fb820b4f69db2787))
+
+- **taux-tva**: CRUD du référentiel des taux de TVA
+  ([`e7d99f2`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/e7d99f2e2eeef882e3380bb1b66e414bdcc87c34))
+
+- **utilisateurs**: Bloque l'ajout d'utilisateurs au-delà de la limite du plan
+  ([`b710b21`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/b710b210020cf92205da5194f51a3b8a68f2251f))
+
+- **utilisateurs**: Expose compte_protege dans UtilisateurRead
+  ([`a6cb440`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/a6cb4408fb6683a51614be818882a68bda9e2389))
+
+- **utilisateurs**: Expose est_admin de l'entreprise active sur GET /me
+  ([`848858b`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/848858bad01c8b7be1f53bfedb69d035c91596aa))
+
+- **utilisateurs**: Recherche d'utilisateur par email et exposition du statut admin plateforme
+  ([`943b7e8`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/943b7e87ea2e0510716f431b125b8fd605c414e2))
+
+### Testing
+
+- **ci**: Fournit une config de test factice pour la collecte pytest
+  ([`913dfae`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/913dfaef9fd721e43bb3b47f02f66806181ca755))
+
+
 ## v1.5.0 (2026-07-02)
 
 ### Bug Fixes
