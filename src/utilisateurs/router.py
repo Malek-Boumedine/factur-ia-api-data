@@ -11,16 +11,19 @@ from src.auth.dependencies import (
     verify_tenant_access,
 )
 from src.auth.models import Role, UtilisateurRole
+from src.auth.schemas import MessageResponse
 from src.core.database import get_session
 from src.core.security import get_password_hash
 from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
 from src.utilisateurs.schemas import (
+    ChangementMotDePasseRequest,
     UtilisateurCreate,
     UtilisateurRead,
     UtilisateurTeamUpdate,
     UtilisateurUpdate,
 )
+from src.utilisateurs.services import change_password
 
 router = APIRouter(prefix="/utilisateurs", tags=["Gestion des Utilisateurs"])
 
@@ -107,6 +110,42 @@ async def update_my_profile(
     await session.commit()
     await session.refresh(current_user)
     return current_user
+
+
+@router.post(
+    "/me/changer-mot-de-passe",
+    response_model=MessageResponse,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Mot de passe actuel incorrect, ou nouveau mot de passe "
+            "identique à l'actuel.",
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "Validation échouée (ex : nouveau mot de passe de moins "
+            "de 8 caractères).",
+        },
+    },
+)
+async def change_my_password(
+    payload: ChangementMotDePasseRequest,
+    current_user: Annotated[Utilisateur, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> MessageResponse:
+    """
+    Permet à l'utilisateur connecté de changer son propre mot de passe.
+
+    Exige le mot de passe actuel (aucun changement à l'aveugle sur une session
+    ouverte) et invalide les liens de réinitialisation en cours. Distinct du flux
+    « mot de passe oublié », qui repose lui sur un token reçu par email et ne
+    nécessite pas d'être authentifié. Aucun header tenant n'est requis.
+    """
+    await change_password(
+        session,
+        current_user,
+        payload.mot_de_passe_actuel,
+        payload.nouveau_mot_de_passe,
+    )
+    return MessageResponse(message="Votre mot de passe a été mis à jour.")
 
 
 @router.get("/", response_model=list[UtilisateurRead])

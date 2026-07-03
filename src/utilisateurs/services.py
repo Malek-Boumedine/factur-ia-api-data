@@ -12,6 +12,8 @@ from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.auth.service import invalidate_pending_reset_tokens
+from src.core.security import get_password_hash, verify_password
 from src.utilisateurs.models import Utilisateur
 
 
@@ -40,6 +42,46 @@ async def search_users_by_email(
     )
     result = await session.exec(statement)
     return list(result.all())
+
+
+async def change_password(
+    session: AsyncSession,
+    current_user: Utilisateur,
+    mot_de_passe_actuel: str,
+    nouveau_mot_de_passe: str,
+) -> None:
+    """
+    Change le mot de passe d'un utilisateur déjà authentifié.
+
+    Sécurité : re-vérifie d'abord le mot de passe actuel — on ne change jamais
+    un mot de passe à l'aveugle sur une session ouverte. Refuse un nouveau mot
+    de passe identique à l'ancien. En cas d'erreur, renvoie un 400 (et non 401)
+    pour ne pas déclencher côté front la logique de session expirée.
+
+    Après application du nouveau hash, invalide les liens de réinitialisation en
+    cours (cohérence avec le flux « mot de passe oublié » : un lien émis avant
+    ne doit plus être exploitable), puis valide la transaction.
+    """
+    if not verify_password(mot_de_passe_actuel, current_user.hash_mot_de_passe):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le mot de passe actuel est incorrect.",
+        )
+
+    if verify_password(nouveau_mot_de_passe, current_user.hash_mot_de_passe):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le nouveau mot de passe doit être différent de l'actuel.",
+        )
+
+    # Un utilisateur authentifié possède toujours un identifiant persisté.
+    if current_user.id is None:
+        raise HTTPException(status_code=500, detail="ID utilisateur manquant")
+
+    current_user.hash_mot_de_passe = get_password_hash(nouveau_mot_de_passe)
+    session.add(current_user)
+    await invalidate_pending_reset_tokens(session, current_user.id)
+    await session.commit()
 
 
 async def _get_user_or_404(session: AsyncSession, utilisateur_id: int) -> Utilisateur:

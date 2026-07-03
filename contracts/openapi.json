@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.5.0"
+    "version": "1.6.0"
   },
   "paths": {
     "/auth/token": {
@@ -995,6 +995,49 @@
             }
           }
         }
+      }
+    },
+    "/utilisateurs/me/changer-mot-de-passe": {
+      "post": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Change My Password",
+        "description": "Permet à l'utilisateur connecté de changer son propre mot de passe.\n\nExige le mot de passe actuel (aucun changement à l'aveugle sur une session\nouverte) et invalide les liens de réinitialisation en cours. Distinct du flux\n« mot de passe oublié », qui repose lui sur un token reçu par email et ne\nnécessite pas d'être authentifié. Aucun header tenant n'est requis.",
+        "operationId": "change_my_password_utilisateurs_me_changer_mot_de_passe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangementMotDePasseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Mot de passe actuel incorrect, ou nouveau mot de passe identique à l'actuel."
+          },
+          "422": {
+            "description": "Validation échouée (ex : nouveau mot de passe de moins de 8 caractères)."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/utilisateurs/": {
@@ -3015,6 +3058,28 @@
         "type": "object",
         "title": "CatalogueUpdate",
         "description": "Schéma pour la mise à jour partielle d'un produit (PATCH).\nTous les champs sont optionnels pour permettre\nde ne modifier qu'une ou plusieurs valeurs."
+      },
+      "ChangementMotDePasseRequest": {
+        "properties": {
+          "mot_de_passe_actuel": {
+            "type": "string",
+            "title": "Mot De Passe Actuel",
+            "description": "Mot de passe actuel en clair"
+          },
+          "nouveau_mot_de_passe": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Nouveau Mot De Passe",
+            "description": "Nouveau mot de passe en clair"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mot_de_passe_actuel",
+          "nouveau_mot_de_passe"
+        ],
+        "title": "ChangementMotDePasseRequest",
+        "description": "Changement de mot de passe par un utilisateur connecté.\n\nLe mot de passe actuel est exigé pour re-vérifier l'identité avant tout\nchangement (jamais de modification à l'aveugle sur une session ouverte). Le\nnouveau suit la même politique de robustesse que l'inscription et la\nréinitialisation (`min_length=8`)."
       },
       "ChangementPlanRequest": {
         "properties": {

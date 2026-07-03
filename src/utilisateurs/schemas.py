@@ -39,6 +39,22 @@ class UtilisateurUpdate(BaseModel):
     est_actif: bool | None = None
 
 
+class ChangementMotDePasseRequest(BaseModel):
+    """
+    Changement de mot de passe par un utilisateur connecté.
+
+    Le mot de passe actuel est exigé pour re-vérifier l'identité avant tout
+    changement (jamais de modification à l'aveugle sur une session ouverte). Le
+    nouveau suit la même politique de robustesse que l'inscription et la
+    réinitialisation (`min_length=8`).
+    """
+
+    mot_de_passe_actuel: str = Field(..., description="Mot de passe actuel en clair")
+    nouveau_mot_de_passe: str = Field(
+        ..., min_length=8, description="Nouveau mot de passe en clair"
+    )
+
+
 class UtilisateurRead(UtilisateurBase):
     """Schéma de sortie (le hash n'est jamais renvoyé)."""
 
