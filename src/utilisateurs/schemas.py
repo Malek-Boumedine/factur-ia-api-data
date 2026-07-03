@@ -55,6 +55,33 @@ class ChangementMotDePasseRequest(BaseModel):
     )
 
 
+class ChangementEmailRequest(BaseModel):
+    """
+    Changement d'email par un utilisateur connecté.
+
+    L'email étant l'identifiant de connexion, le mot de passe actuel est exigé
+    pour re-vérifier l'identité avant tout changement (jamais de modification à
+    l'aveugle sur une session ouverte).
+    """
+
+    mot_de_passe_actuel: str = Field(..., description="Mot de passe actuel en clair")
+    nouvel_email: EmailStr = Field(..., max_length=255, description="Nouvel email")
+
+
+class ChangementEmailResponse(BaseModel):
+    """
+    Réponse au changement d'email.
+
+    L'email étant le `sub` du JWT, l'ancien token devient caduc dès le
+    changement. On ré-émet donc un token frais (aligné sur le format du login)
+    pour que la session se poursuive sans reconnexion.
+    """
+
+    message: str
+    access_token: str = Field(..., description="Nouveau JWT à utiliser désormais")
+    token_type: str = Field(default="bearer")
+
+
 class UtilisateurRead(UtilisateurBase):
     """Schéma de sortie (le hash n'est jamais renvoyé)."""
 

@@ -13,17 +13,19 @@ from src.auth.dependencies import (
 from src.auth.models import Role, UtilisateurRole
 from src.auth.schemas import MessageResponse
 from src.core.database import get_session
-from src.core.security import get_password_hash
+from src.core.security import create_access_token, get_password_hash
 from src.entreprises.models import UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
 from src.utilisateurs.schemas import (
+    ChangementEmailRequest,
+    ChangementEmailResponse,
     ChangementMotDePasseRequest,
     UtilisateurCreate,
     UtilisateurRead,
     UtilisateurTeamUpdate,
     UtilisateurUpdate,
 )
-from src.utilisateurs.services import change_password
+from src.utilisateurs.services import change_email, change_password
 
 router = APIRouter(prefix="/utilisateurs", tags=["Gestion des Utilisateurs"])
 
@@ -146,6 +148,51 @@ async def change_my_password(
         payload.nouveau_mot_de_passe,
     )
     return MessageResponse(message="Votre mot de passe a été mis à jour.")
+
+
+@router.post(
+    "/me/changer-email",
+    response_model=ChangementEmailResponse,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Mot de passe actuel incorrect, ou nouvel email "
+            "identique à l'actuel.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "description": "Cet email est déjà utilisé par un autre compte.",
+        },
+        status.HTTP_422_UNPROCESSABLE_ENTITY: {
+            "description": "Validation échouée (ex : format d'email invalide).",
+        },
+    },
+)
+async def change_my_email(
+    payload: ChangementEmailRequest,
+    current_user: Annotated[Utilisateur, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> ChangementEmailResponse:
+    """
+    Permet à l'utilisateur connecté de changer son propre email.
+
+    L'email étant l'identifiant de connexion, le mot de passe actuel est exigé
+    (aucun changement à l'aveugle sur une session ouverte). Un email déjà pris
+    par un autre compte est refusé en 409. Aucun header tenant n'est requis.
+
+    L'email servant de `sub` au JWT, l'ancien token devient caduc : un token
+    frais (sur le nouvel email) est renvoyé pour poursuivre la session sans
+    reconnexion.
+    """
+    await change_email(
+        session,
+        current_user,
+        payload.mot_de_passe_actuel,
+        payload.nouvel_email,
+    )
+    access_token = create_access_token(data={"sub": current_user.email})
+    return ChangementEmailResponse(
+        message="Votre email a été mis à jour.",
+        access_token=access_token,
+    )
 
 
 @router.get("/", response_model=list[UtilisateurRead])

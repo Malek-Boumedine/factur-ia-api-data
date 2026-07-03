@@ -1040,6 +1040,52 @@
         ]
       }
     },
+    "/utilisateurs/me/changer-email": {
+      "post": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Change My Email",
+        "description": "Permet à l'utilisateur connecté de changer son propre email.\n\nL'email étant l'identifiant de connexion, le mot de passe actuel est exigé\n(aucun changement à l'aveugle sur une session ouverte). Un email déjà pris\npar un autre compte est refusé en 409. Aucun header tenant n'est requis.\n\nL'email servant de `sub` au JWT, l'ancien token devient caduc : un token\nfrais (sur le nouvel email) est renvoyé pour poursuivre la session sans\nreconnexion.",
+        "operationId": "change_my_email_utilisateurs_me_changer_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangementEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangementEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Mot de passe actuel incorrect, ou nouvel email identique à l'actuel."
+          },
+          "409": {
+            "description": "Cet email est déjà utilisé par un autre compte."
+          },
+          "422": {
+            "description": "Validation échouée (ex : format d'email invalide)."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/utilisateurs/": {
       "get": {
         "tags": [
@@ -3058,6 +3104,54 @@
         "type": "object",
         "title": "CatalogueUpdate",
         "description": "Schéma pour la mise à jour partielle d'un produit (PATCH).\nTous les champs sont optionnels pour permettre\nde ne modifier qu'une ou plusieurs valeurs."
+      },
+      "ChangementEmailRequest": {
+        "properties": {
+          "mot_de_passe_actuel": {
+            "type": "string",
+            "title": "Mot De Passe Actuel",
+            "description": "Mot de passe actuel en clair"
+          },
+          "nouvel_email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email",
+            "title": "Nouvel Email",
+            "description": "Nouvel email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mot_de_passe_actuel",
+          "nouvel_email"
+        ],
+        "title": "ChangementEmailRequest",
+        "description": "Changement d'email par un utilisateur connecté.\n\nL'email étant l'identifiant de connexion, le mot de passe actuel est exigé\npour re-vérifier l'identité avant tout changement (jamais de modification à\nl'aveugle sur une session ouverte)."
+      },
+      "ChangementEmailResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "access_token": {
+            "type": "string",
+            "title": "Access Token",
+            "description": "Nouveau JWT à utiliser désormais"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "access_token"
+        ],
+        "title": "ChangementEmailResponse",
+        "description": "Réponse au changement d'email.\n\nL'email étant le `sub` du JWT, l'ancien token devient caduc dès le\nchangement. On ré-émet donc un token frais (aligné sur le format du login)\npour que la session se poursuive sans reconnexion."
       },
       "ChangementMotDePasseRequest": {
         "properties": {

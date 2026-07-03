@@ -9,12 +9,19 @@ rôles métier ni aux rattachements d'entreprise.
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.service import invalidate_pending_reset_tokens
+from src.core.db_errors import UniqueConflict, conflict_from_integrity_error
 from src.core.security import get_password_hash, verify_password
 from src.utilisateurs.models import Utilisateur
+
+# Contrainte unique de la table `utilisateur` mappée vers un message clair.
+_UTILISATEUR_EMAIL_CONFLICTS = [
+    UniqueConflict("email", "Cet email est déjà utilisé."),
+]
 
 
 async def list_platform_admins(session: AsyncSession) -> list[Utilisateur]:
@@ -82,6 +89,56 @@ async def change_password(
     session.add(current_user)
     await invalidate_pending_reset_tokens(session, current_user.id)
     await session.commit()
+
+
+async def change_email(
+    session: AsyncSession,
+    current_user: Utilisateur,
+    mot_de_passe_actuel: str,
+    nouvel_email: str,
+) -> None:
+    """
+    Change l'email (identifiant de connexion) d'un utilisateur authentifié.
+
+    Sécurité : re-vérifie d'abord le mot de passe actuel — on ne change jamais
+    l'identifiant de connexion à l'aveugle sur une session ouverte. En cas
+    d'échec, renvoie un 400 (et non 401), cohérent avec le changement de mot de
+    passe et sans déclencher côté front la logique de session expirée.
+
+    Refuse un email identique à l'actuel (400) et gère l'unicité : un email déjà
+    utilisé par un autre compte renvoie un 409 (pré-vérification déterministe +
+    filet `IntegrityError` contre la course), jamais un 500.
+    """
+    if not verify_password(mot_de_passe_actuel, current_user.hash_mot_de_passe):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le mot de passe actuel est incorrect.",
+        )
+
+    if nouvel_email == current_user.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le nouvel email doit être différent de l'actuel.",
+        )
+
+    # Pré-vérification déterministe : l'email diffère de l'actuel, donc toute
+    # ligne trouvée appartient à un autre compte.
+    existing = await session.exec(
+        select(Utilisateur).where(Utilisateur.email == nouvel_email)
+    )
+    if existing.first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cet email est déjà utilisé.",
+        )
+
+    current_user.email = nouvel_email
+    session.add(current_user)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise conflict_from_integrity_error(exc, _UTILISATEUR_EMAIL_CONFLICTS) from None
 
 
 async def _get_user_or_404(session: AsyncSession, utilisateur_id: int) -> Utilisateur:
