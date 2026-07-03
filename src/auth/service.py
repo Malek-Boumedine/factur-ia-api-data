@@ -42,17 +42,11 @@ async def request_password_reset(
     result = await session.exec(select(Utilisateur).where(Utilisateur.email == email))
     user = result.first()
 
-    if user is None or not user.est_actif:
+    if user is None or user.id is None or not user.est_actif:
         return
 
-    # Invalide les demandes précédentes non consommées de cet utilisateur
-    # (un seul lien de réinitialisation valable à la fois).
-    await session.exec(
-        delete(ReinitialisationMotDePasse).where(
-            col(ReinitialisationMotDePasse.id_utilisateur) == user.id,
-            col(ReinitialisationMotDePasse.date_utilisation).is_(None),
-        )
-    )
+    # Un seul lien de réinitialisation valable à la fois.
+    await invalidate_pending_reset_tokens(session, user.id)
 
     plain_token, token_hash = generate_reset_token()
     expiration = datetime.now(UTC) + timedelta(hours=settings.RESET_TOKEN_EXPIRE_HOURS)
@@ -67,6 +61,24 @@ async def request_password_reset(
 
     subject, body = build_reset_email(plain_token)
     await email_sender.send(user.email, subject, body)
+
+
+async def invalidate_pending_reset_tokens(session: AsyncSession, user_id: int) -> None:
+    """
+    Supprime les tokens de réinitialisation non encore consommés d'un utilisateur.
+
+    Mutualisé entre deux usages : à l'émission d'une nouvelle demande « mot de
+    passe oublié » (un seul lien valable à la fois) et après un changement de
+    mot de passe authentifié (un lien émis avant le changement ne doit plus
+    permettre de le modifier). N'effectue pas de `commit` : l'appelant décide du
+    moment de la validation transactionnelle.
+    """
+    await session.exec(
+        delete(ReinitialisationMotDePasse).where(
+            col(ReinitialisationMotDePasse.id_utilisateur) == user_id,
+            col(ReinitialisationMotDePasse.date_utilisation).is_(None),
+        )
+    )
 
 
 async def apply_password_reset(

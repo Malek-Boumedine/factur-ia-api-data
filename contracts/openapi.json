@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.5.0"
+    "version": "1.6.0"
   },
   "paths": {
     "/auth/token": {
@@ -560,7 +560,7 @@
           "Gestion des Abonnements"
         ],
         "summary": "List Plans",
-        "description": "Liste tous les plans d'abonnement disponibles sur la plateforme.\nAccessible par tout utilisateur authentifié.",
+        "description": "Liste tous les plans d'abonnement disponibles sur la plateforme.\nRoute publique : les offres et leurs tarifs sont affichés sur la page\nd'accueil du client web, sans authentification.",
         "operationId": "list_plans_abonnements__get",
         "responses": {
           "200": {
@@ -577,12 +577,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -968,7 +963,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UtilisateurUpdate"
+                "$ref": "#/components/schemas/ProfilUpdate"
               }
             }
           }
@@ -995,6 +990,95 @@
             }
           }
         }
+      }
+    },
+    "/utilisateurs/me/changer-mot-de-passe": {
+      "post": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Change My Password",
+        "description": "Permet à l'utilisateur connecté de changer son propre mot de passe.\n\nExige le mot de passe actuel (aucun changement à l'aveugle sur une session\nouverte) et invalide les liens de réinitialisation en cours. Distinct du flux\n« mot de passe oublié », qui repose lui sur un token reçu par email et ne\nnécessite pas d'être authentifié. Aucun header tenant n'est requis.",
+        "operationId": "change_my_password_utilisateurs_me_changer_mot_de_passe_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangementMotDePasseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Mot de passe actuel incorrect, ou nouveau mot de passe identique à l'actuel."
+          },
+          "422": {
+            "description": "Validation échouée (ex : nouveau mot de passe de moins de 8 caractères)."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/utilisateurs/me/changer-email": {
+      "post": {
+        "tags": [
+          "Gestion des Utilisateurs"
+        ],
+        "summary": "Change My Email",
+        "description": "Permet à l'utilisateur connecté de changer son propre email.\n\nL'email étant l'identifiant de connexion, le mot de passe actuel est exigé\n(aucun changement à l'aveugle sur une session ouverte). Un email déjà pris\npar un autre compte est refusé en 409. Aucun header tenant n'est requis.\n\nL'email servant de `sub` au JWT, l'ancien token devient caduc : un token\nfrais (sur le nouvel email) est renvoyé pour poursuivre la session sans\nreconnexion.",
+        "operationId": "change_my_email_utilisateurs_me_changer_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangementEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangementEmailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Mot de passe actuel incorrect, ou nouvel email identique à l'actuel."
+          },
+          "409": {
+            "description": "Cet email est déjà utilisé par un autre compte."
+          },
+          "422": {
+            "description": "Validation échouée (ex : format d'email invalide)."
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/utilisateurs/": {
@@ -3016,6 +3100,76 @@
         "title": "CatalogueUpdate",
         "description": "Schéma pour la mise à jour partielle d'un produit (PATCH).\nTous les champs sont optionnels pour permettre\nde ne modifier qu'une ou plusieurs valeurs."
       },
+      "ChangementEmailRequest": {
+        "properties": {
+          "mot_de_passe_actuel": {
+            "type": "string",
+            "title": "Mot De Passe Actuel",
+            "description": "Mot de passe actuel en clair"
+          },
+          "nouvel_email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email",
+            "title": "Nouvel Email",
+            "description": "Nouvel email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mot_de_passe_actuel",
+          "nouvel_email"
+        ],
+        "title": "ChangementEmailRequest",
+        "description": "Changement d'email par un utilisateur connecté.\n\nL'email étant l'identifiant de connexion, le mot de passe actuel est exigé\npour re-vérifier l'identité avant tout changement (jamais de modification à\nl'aveugle sur une session ouverte)."
+      },
+      "ChangementEmailResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "access_token": {
+            "type": "string",
+            "title": "Access Token",
+            "description": "Nouveau JWT à utiliser désormais"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "access_token"
+        ],
+        "title": "ChangementEmailResponse",
+        "description": "Réponse au changement d'email.\n\nL'email étant le `sub` du JWT, l'ancien token devient caduc dès le\nchangement. On ré-émet donc un token frais (aligné sur le format du login)\npour que la session se poursuive sans reconnexion."
+      },
+      "ChangementMotDePasseRequest": {
+        "properties": {
+          "mot_de_passe_actuel": {
+            "type": "string",
+            "title": "Mot De Passe Actuel",
+            "description": "Mot de passe actuel en clair"
+          },
+          "nouveau_mot_de_passe": {
+            "type": "string",
+            "minLength": 8,
+            "title": "Nouveau Mot De Passe",
+            "description": "Nouveau mot de passe en clair"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mot_de_passe_actuel",
+          "nouveau_mot_de_passe"
+        ],
+        "title": "ChangementMotDePasseRequest",
+        "description": "Changement de mot de passe par un utilisateur connecté.\n\nLe mot de passe actuel est exigé pour re-vérifier l'identité avant tout\nchangement (jamais de modification à l'aveugle sur une session ouverte). Le\nnouveau suit la même politique de robustesse que l'inscription et la\nréinitialisation (`min_length=8`)."
+      },
       "ChangementPlanRequest": {
         "properties": {
           "id_abonnement": {
@@ -4367,6 +4521,92 @@
         ],
         "title": "Page[ClientRead]"
       },
+      "ProfilUpdate": {
+        "properties": {
+          "nom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom"
+          },
+          "prenom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prenom"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          }
+        },
+        "type": "object",
+        "title": "ProfilUpdate",
+        "description": "Mise à jour partielle du profil par l'utilisateur lui-même (self-update).\n\nVolontairement restreint : ni `email` (modifiable uniquement via l'endpoint\ndédié sécurisé `POST /utilisateurs/me/changer-email`, qui exige le mot de\npasse actuel) ni `est_actif` (un utilisateur ne peut pas se désactiver\nlui-même). Ces deux champs restent réservés à la voie admin\n(`UtilisateurTeamUpdate`)."
+      },
       "ReinitialisationRequest": {
         "properties": {
           "token": {
@@ -5159,115 +5399,6 @@
         "type": "object",
         "title": "UtilisateurTeamUpdate",
         "description": "Hérite de tous les champs optionnels (nom, prenom, adresse...) de UtilisateurUpdate,\net y ajoute les champs de gestion réservés aux administrateurs."
-      },
-      "UtilisateurUpdate": {
-        "properties": {
-          "nom": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nom"
-          },
-          "prenom": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prenom"
-          },
-          "adresse": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Adresse"
-          },
-          "adresse_complement": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Adresse Complement"
-          },
-          "code_postal": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 10
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code Postal"
-          },
-          "ville": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 150
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ville"
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "email"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          },
-          "telephone": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Telephone"
-          },
-          "est_actif": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Est Actif"
-          }
-        },
-        "type": "object",
-        "title": "UtilisateurUpdate",
-        "description": "Schéma pour la mise à jour partielle d'un utilisateur."
       },
       "ValidationError": {
         "properties": {
