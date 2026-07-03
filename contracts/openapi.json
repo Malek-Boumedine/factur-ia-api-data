@@ -968,7 +968,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UtilisateurUpdate"
+                "$ref": "#/components/schemas/ProfilUpdate"
               }
             }
           }
@@ -4526,6 +4526,92 @@
         ],
         "title": "Page[ClientRead]"
       },
+      "ProfilUpdate": {
+        "properties": {
+          "nom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom"
+          },
+          "prenom": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prenom"
+          },
+          "adresse": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse"
+          },
+          "adresse_complement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adresse Complement"
+          },
+          "code_postal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Postal"
+          },
+          "ville": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ville"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          }
+        },
+        "type": "object",
+        "title": "ProfilUpdate",
+        "description": "Mise à jour partielle du profil par l'utilisateur lui-même (self-update).\n\nVolontairement restreint : ni `email` (modifiable uniquement via l'endpoint\ndédié sécurisé `POST /utilisateurs/me/changer-email`, qui exige le mot de\npasse actuel) ni `est_actif` (un utilisateur ne peut pas se désactiver\nlui-même). Ces deux champs restent réservés à la voie admin\n(`UtilisateurTeamUpdate`)."
+      },
       "ReinitialisationRequest": {
         "properties": {
           "token": {
@@ -5318,115 +5404,6 @@
         "type": "object",
         "title": "UtilisateurTeamUpdate",
         "description": "Hérite de tous les champs optionnels (nom, prenom, adresse...) de UtilisateurUpdate,\net y ajoute les champs de gestion réservés aux administrateurs."
-      },
-      "UtilisateurUpdate": {
-        "properties": {
-          "nom": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Nom"
-          },
-          "prenom": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prenom"
-          },
-          "adresse": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Adresse"
-          },
-          "adresse_complement": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Adresse Complement"
-          },
-          "code_postal": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 10
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code Postal"
-          },
-          "ville": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 150
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ville"
-          },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "email"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Email"
-          },
-          "telephone": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Telephone"
-          },
-          "est_actif": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Est Actif"
-          }
-        },
-        "type": "object",
-        "title": "UtilisateurUpdate",
-        "description": "Schéma pour la mise à jour partielle d'un utilisateur."
       },
       "ValidationError": {
         "properties": {

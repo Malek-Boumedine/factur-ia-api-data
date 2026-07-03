@@ -25,8 +25,28 @@ class UtilisateurCreate(UtilisateurBase):
     )
 
 
+class ProfilUpdate(BaseModel):
+    """
+    Mise à jour partielle du profil par l'utilisateur lui-même (self-update).
+
+    Volontairement restreint : ni `email` (modifiable uniquement via l'endpoint
+    dédié sécurisé `POST /utilisateurs/me/changer-email`, qui exige le mot de
+    passe actuel) ni `est_actif` (un utilisateur ne peut pas se désactiver
+    lui-même). Ces deux champs restent réservés à la voie admin
+    (`UtilisateurTeamUpdate`).
+    """
+
+    nom: str | None = None
+    prenom: str | None = None
+    adresse: str | None = None
+    adresse_complement: str | None = None
+    code_postal: str | None = Field(default=None, max_length=10)
+    ville: str | None = Field(default=None, max_length=150)
+    telephone: str | None = None
+
+
 class UtilisateurUpdate(BaseModel):
-    """Schéma pour la mise à jour partielle d'un utilisateur."""
+    """Schéma pour la mise à jour partielle d'un utilisateur (voie admin)."""
 
     nom: str | None = None
     prenom: str | None = None

@@ -20,10 +20,10 @@ from src.utilisateurs.schemas import (
     ChangementEmailRequest,
     ChangementEmailResponse,
     ChangementMotDePasseRequest,
+    ProfilUpdate,
     UtilisateurCreate,
     UtilisateurRead,
     UtilisateurTeamUpdate,
-    UtilisateurUpdate,
 )
 from src.utilisateurs.services import change_email, change_password
 
@@ -97,7 +97,7 @@ async def get_my_profile(
 
 @router.patch("/me", response_model=UtilisateurRead)
 async def update_my_profile(
-    user_in: UtilisateurUpdate,
+    user_in: ProfilUpdate,
     current_user: Annotated[Utilisateur, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Any:
