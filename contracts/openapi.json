@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.6.0"
+    "version": "1.7.0"
   },
   "paths": {
     "/auth/token": {
@@ -2345,7 +2345,7 @@
           "Documents & OCR"
         ],
         "summary": "Upload Document",
-        "description": "Reçoit un fichier (PDF ou Image), le valide, le stocke et crée une entrée en base.",
+        "description": "Reçoit un fichier (PDF ou Image), le valide, le stocke et crée une entrée en base.\n\nDéclenche ensuite l'extraction OCR en tâche de fond : la réponse est\nrenvoyée sans attendre l'API IA, qui rappellera le webhook OCR.",
         "operationId": "upload_document_documents_upload_post",
         "security": [
           {

@@ -16,6 +16,7 @@ class StatutDocument(str, Enum):
     """Statuts possibles pour un document uploadé."""
 
     EN_ATTENTE = "en_attente"
+    EN_COURS = "en_cours"
     TRAITE = "traité"
     ERREUR = "erreur"
 

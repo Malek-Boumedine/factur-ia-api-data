@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -21,7 +22,7 @@ from src.core.database import get_session
 from src.documents.exceptions import DocumentIntrouvableError
 from src.documents.models import Document, StatutDocument
 from src.documents.schemas import OcrWebhookPayload
-from src.documents.service import traiter_callback_ocr
+from src.documents.service import dispatch_extraction, traiter_callback_ocr
 from src.utilisateurs.models import Utilisateur
 
 API_KEY_HEADER = APIKeyHeader(name="X-OCR-Secret-Token", auto_error=True)
@@ -42,9 +43,13 @@ async def upload_document(
     current_user: current_user_dep,
     id_entreprise: entreprise_id_dep,
     file: Annotated[UploadFile, File(...)],
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     """
     Reçoit un fichier (PDF ou Image), le valide, le stocke et crée une entrée en base.
+
+    Déclenche ensuite l'extraction OCR en tâche de fond : la réponse est
+    renvoyée sans attendre l'API IA, qui rappellera le webhook OCR.
     """
     if current_user.id is None:
         raise HTTPException(
@@ -89,6 +94,10 @@ async def upload_document(
     session.add(db_document)
     await session.commit()
     await session.refresh(db_document)
+
+    # 5. Déclenchement de l'extraction OCR après l'envoi de la réponse
+    if db_document.id is not None:
+        background_tasks.add_task(dispatch_extraction, db_document.id, chemin_complet)
 
     return {
         "message": "Fichier uploadé avec succès",

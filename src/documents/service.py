@@ -1,9 +1,12 @@
 from datetime import date
+from pathlib import Path
 
+from loguru import logger
 from pydantic import ValidationError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.core.database import async_session_maker
 from src.documents.exceptions import DocumentIntrouvableError
 from src.documents.models import (
     Document,
@@ -16,6 +19,34 @@ from src.factures.exceptions import FacturationError
 from src.factures.models import TauxTva
 from src.factures.schemas import FactureCreate, FactureLigneCreate
 from src.factures.service import create_facture_brouillon
+from src.integrations.ia_api.client import trigger_extraction
+
+
+async def dispatch_extraction(id_document: int, file_path: Path) -> None:
+    """
+    Tâche de fond post-upload : envoie le document à l'API IA pour extraction.
+
+    Exécutée après l'envoi de la réponse HTTP (la session de la requête est
+    déjà fermée), elle ouvre sa propre session pour mettre à jour le statut :
+    EN_COURS si l'API IA a accepté la demande, ERREUR sinon. Si le webhook OCR
+    a déjà posé un statut final entre-temps, on ne l'écrase pas.
+    """
+    accepted = await trigger_extraction(file_path, id_document)
+
+    async with async_session_maker() as session:
+        document = await session.get(Document, id_document)
+        if document is None:
+            logger.warning(
+                "Document {} introuvable après déclenchement OCR", id_document
+            )
+            return
+
+        if accepted and document.statut != StatutDocument.EN_ATTENTE:
+            return
+
+        document.statut = StatutDocument.EN_COURS if accepted else StatutDocument.ERREUR
+        session.add(document)
+        await session.commit()
 
 
 async def _payload_vers_facture_create(
