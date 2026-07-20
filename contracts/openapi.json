@@ -2401,6 +2401,65 @@
         }
       }
     },
+    "/documents/{id_document}": {
+      "get": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Get Document",
+        "description": "Récupère l'état d'un document en s'assurant qu'il appartient bien à\nl'entreprise active (isolation des données).\n\nPensée pour le polling du front pendant l'extraction : le statut évolue\nde `en_attente` à `en_cours` puis `traité` ou `erreur`. Quand le document\nest traité, `id_facture` pointe vers le brouillon généré par l'OCR.",
+        "operationId": "get_document_documents__id_document__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_document",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Document"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/webhook/ocr": {
       "post": {
         "tags": [
@@ -3577,6 +3636,46 @@
         "type": "object",
         "title": "ClientUpdate",
         "description": "Schéma pour la mise à jour partielle d'un client (PATCH)."
+      },
+      "DocumentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_original": {
+            "type": "string",
+            "title": "Nom Original"
+          },
+          "statut": {
+            "$ref": "#/components/schemas/StatutDocument"
+          },
+          "date_chargement": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Chargement"
+          },
+          "id_facture": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Facture"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_original",
+          "statut",
+          "date_chargement"
+        ],
+        "title": "DocumentRead",
+        "description": "État d'un document uploadé, pour le suivi du traitement par le front.\n\n`id_facture` pointe vers le brouillon de facture généré par l'OCR :\nrenseigné uniquement quand le document est traité, null sinon."
       },
       "EntrepriseAbonnementRead": {
         "properties": {
@@ -4802,6 +4901,17 @@
         "type": "object",
         "title": "SearchSireneSiretResponse",
         "description": "Schéma représentant les données renvoyées\npar l'API gouvernementale lors d'une recherche par SIRET.\nLes champs sont alignés avec ClientBase pour\nfaciliter le pré-remplissage côté front-end."
+      },
+      "StatutDocument": {
+        "type": "string",
+        "enum": [
+          "en_attente",
+          "en_cours",
+          "traité",
+          "erreur"
+        ],
+        "title": "StatutDocument",
+        "description": "Statuts possibles pour un document uploadé."
       },
       "StatutSouscription": {
         "type": "string",
