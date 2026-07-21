@@ -1,6 +1,8 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import selectinload
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_tenant_access
@@ -12,6 +14,7 @@ from src.factures.exceptions import (
     TauxTvaIntrouvableError,
     TransitionStatutInvalideError,
 )
+from src.factures.models import Facture
 from src.factures.schemas import FactureCreate, FactureReadWithLignes
 from src.factures.service import (
     create_facture_brouillon,
@@ -61,6 +64,36 @@ async def create_brouillon_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         ) from e
+
+
+@router.get("/{facture_id}", response_model=FactureReadWithLignes)
+async def get_facture(
+    facture_id: int,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+) -> Any:
+    """
+    Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle
+    appartient bien à l'entreprise active (isolation des données).
+
+    Pensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)
+    avant validation, mais valable pour toute facture.
+    """
+    statement = (
+        select(Facture)
+        .where(Facture.id == facture_id, Facture.id_entreprise == id_entreprise)
+        .options(selectinload(Facture.lignes))  # type: ignore
+    )
+    result = await session.exec(statement)
+    db_facture = result.first()
+
+    if not db_facture:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Facture introuvable dans cet espace entreprise",
+        )
+
+    return db_facture
 
 
 @router.post(

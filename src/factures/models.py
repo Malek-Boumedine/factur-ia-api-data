@@ -98,7 +98,10 @@ class Facture(SQLModel, table=True):
     notes: str | None = Field(default=None, sa_column=Column(TEXT, nullable=True))
 
     # relations
-    lignes: list["FactureLigne"] = Relationship(back_populates="facture")
+    lignes: list["FactureLigne"] = Relationship(
+        back_populates="facture",
+        sa_relationship_kwargs={"order_by": "FactureLigne.ordre"},
+    )
     statut_ref: "StatutFacture" = Relationship()
     createur: "Utilisateur" = Relationship()
     entreprise: "Entreprise" = Relationship()
