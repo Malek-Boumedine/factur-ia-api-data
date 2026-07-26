@@ -5036,6 +5036,30 @@
             ],
             "title": "Notes"
           },
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
           "lignes": {
             "anyOf": [
               {

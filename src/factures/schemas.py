@@ -110,6 +110,12 @@ class FactureUpdate(BaseModel):
     reference_commande: str | None = Field(default=None, max_length=100)
     notes: str | None = None
 
+    # SIRET éditables uniquement sur le brouillon (état de travail) :
+    # à la validation, l'émetteur est imposé depuis l'entreprise et le
+    # destinataire depuis la fiche client (inaltérabilité).
+    siret_emetteur: str | None = Field(default=None, max_length=14)
+    siret_destinataire: str | None = Field(default=None, max_length=14)
+
     # Si des lignes sont envoyées lors de l'update,
     # elles remplacent intégralement les anciennes (totaux recalculés).
     lignes: list[FactureLigneCreate] | None = Field(
@@ -127,6 +133,25 @@ class FactureUpdate(BaseModel):
                 "null n'est pas accepté pour ce champ ; "
                 "omettez-le pour le laisser inchangé"
             )
+        return value
+
+    @field_validator("siret_emetteur", "siret_destinataire", mode="before")
+    @classmethod
+    def normalize_siret_brouillon(cls, value: object) -> object:
+        """SIRET permissif sur un brouillon : chiffres uniquement, 14 max.
+
+        Un SIRET incomplet est accepté (état de travail) ; la vérification
+        SIRENE se fait à la validation. Chaîne vide ou espaces = effacement.
+        En mode ``before`` pour retirer les espaces (fréquents en OCR) avant
+        le contrôle de longueur ``max_length=14``.
+        """
+        if not isinstance(value, str):
+            return value
+        value = value.replace(" ", "")
+        if value == "":
+            return None
+        if not value.isdigit():
+            raise ValueError("Le SIRET ne doit contenir que des chiffres.")
         return value
 
 

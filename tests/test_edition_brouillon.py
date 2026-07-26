@@ -195,6 +195,72 @@ async def test_remplacement_lignes_et_recalcul_totaux() -> None:
     assert nouvelle_ligne.montant_ttc == Decimal("36.00")
 
 
+async def test_edition_siret_emetteur_et_destinataire() -> None:
+    """Les deux SIRET sont éditables sur un brouillon : espaces OCR retirés,
+    SIRET incomplet accepté (état de travail)."""
+    facture = _facture_brouillon(siret_emetteur="11111111111111")
+    session = _FakeSession([facture, facture])
+    response = await _patch(
+        _app(session),
+        {
+            "siret_emetteur": "222 222 222 22222",  # 14 chiffres avec espaces OCR
+            "siret_destinataire": "404833048",  # SIREN incomplet toléré
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["siret_emetteur"] == "22222222222222"
+    assert body["siret_destinataire"] == "404833048"
+
+
+async def test_effacement_siret_via_null_et_vide() -> None:
+    """``null`` explicite ou chaîne vide/espaces efface un SIRET du brouillon."""
+    facture = _facture_brouillon(
+        siret_emetteur="11111111111111", siret_destinataire="22222222222222"
+    )
+    session = _FakeSession([facture, facture])
+    response = await _patch(
+        _app(session),
+        {"siret_emetteur": None, "siret_destinataire": "   "},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["siret_emetteur"] is None
+    assert body["siret_destinataire"] is None
+
+
+async def test_siret_aberrant_422() -> None:
+    """Caractères non numériques ou longueur > 14 : rejet en 422 par champ."""
+    session = _FakeSession([])
+    response = await _patch(
+        _app(session),
+        {
+            # lettre au milieu
+            "siret_emetteur": "12A45678900012",  # pragma: allowlist secret
+            "siret_destinataire": "123456789000123",  # 15 chiffres
+        },
+    )
+
+    assert response.status_code == 422
+    locs = [tuple(err["loc"]) for err in response.json()["detail"]]
+    assert ("body", "siret_emetteur") in locs
+    assert ("body", "siret_destinataire") in locs
+    # Aucune requête émise : rejeté avant d'atteindre la base
+    assert session.statements == []
+
+
+async def test_edition_siret_sur_facture_validee_409() -> None:
+    """Les SIRET d'une facture validée sont figés : édition refusée (409)."""
+    facture = _facture_brouillon()
+    facture.statut_ref = StatutFacture(id=2, libelle="Validée")
+    session = _FakeSession([facture])
+    response = await _patch(_app(session), {"siret_destinataire": "22222222222222"})
+
+    assert response.status_code == 409
+
+
 async def test_facture_validee_immuable_409() -> None:
     """Une facture validée est immuable : toute édition est refusée (409)."""
     facture = _facture_brouillon()
