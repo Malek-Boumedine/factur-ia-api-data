@@ -4345,6 +4345,30 @@
             "title": "Notes",
             "description": "Notes internes ou mentions spécifiques"
           },
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
           "lignes": {
             "items": {
               "$ref": "#/components/schemas/FactureLigneCreate"
@@ -4982,6 +5006,30 @@
       },
       "FactureUpdate": {
         "properties": {
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
           "id_client": {
             "anyOf": [
               {
@@ -5085,30 +5133,6 @@
               }
             ],
             "title": "Notes"
-          },
-          "siret_emetteur": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 14
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Siret Emetteur"
-          },
-          "siret_destinataire": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 14
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Siret Destinataire"
           },
           "lignes": {
             "anyOf": [

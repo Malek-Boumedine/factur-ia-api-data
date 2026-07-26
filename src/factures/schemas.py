@@ -81,59 +81,14 @@ class FactureBase(BaseModel):
     )
 
 
-class FactureCreate(FactureBase):
-    """
-    Schéma pour la création initiale d'un brouillon de facture.
-    Les totaux et le numéro de facture seront générés par le système.
-    """
-
-    lignes: list[FactureLigneCreate] = Field(
-        ..., min_length=1, description="Liste des articles (au moins 1 requis)"
-    )
-
-
-class FactureUpdate(BaseModel):
-    """
-    Schéma pour la mise à jour d'un brouillon de facture (sémantique PATCH).
-    Tous les champs sont optionnels : seuls les champs envoyés sont modifiés,
-    un champ omis reste inchangé. Envoyer explicitement ``null`` efface un
-    champ nullable.
+class SiretBrouillonMixin(BaseModel):
+    """SIRET éditables uniquement sur le brouillon (état de travail) :
+    à la validation, l'émetteur est imposé depuis l'entreprise et le
+    destinataire depuis la fiche client (inaltérabilité).
     """
 
-    id_client: int | None = None
-    date_emission: date | None = None
-    date_echeance: date | None = None
-    devise: str | None = Field(default=None, max_length=3)
-    type_facture: TypeFacture | None = None
-    mode_paiement: str | None = Field(default=None, max_length=50)
-    iban: str | None = Field(default=None, max_length=34)
-    reference_commande: str | None = Field(default=None, max_length=100)
-    notes: str | None = None
-
-    # SIRET éditables uniquement sur le brouillon (état de travail) :
-    # à la validation, l'émetteur est imposé depuis l'entreprise et le
-    # destinataire depuis la fiche client (inaltérabilité).
     siret_emetteur: str | None = Field(default=None, max_length=14)
     siret_destinataire: str | None = Field(default=None, max_length=14)
-
-    # Si des lignes sont envoyées lors de l'update,
-    # elles remplacent intégralement les anciennes (totaux recalculés).
-    lignes: list[FactureLigneCreate] | None = Field(
-        default=None,
-        min_length=1,
-        description="Nouvelle liste de lignes remplaçant intégralement l'existante",
-    )
-
-    @field_validator("date_emission", "devise", "type_facture")
-    @classmethod
-    def refuse_explicit_null(cls, value: object) -> object:
-        """Champs non nullables en base : un ``null`` explicite est refusé (422)."""
-        if value is None:
-            raise ValueError(
-                "null n'est pas accepté pour ce champ ; "
-                "omettez-le pour le laisser inchangé"
-            )
-        return value
 
     @field_validator("siret_emetteur", "siret_destinataire", mode="before")
     @classmethod
@@ -152,6 +107,55 @@ class FactureUpdate(BaseModel):
             return None
         if not value.isdigit():
             raise ValueError("Le SIRET ne doit contenir que des chiffres.")
+        return value
+
+
+class FactureCreate(SiretBrouillonMixin, FactureBase):
+    """
+    Schéma pour la création initiale d'un brouillon de facture.
+    Les totaux et le numéro de facture seront générés par le système.
+    """
+
+    lignes: list[FactureLigneCreate] = Field(
+        ..., min_length=1, description="Liste des articles (au moins 1 requis)"
+    )
+
+
+class FactureUpdate(SiretBrouillonMixin):
+    """
+    Schéma pour la mise à jour d'un brouillon de facture (sémantique PATCH).
+    Tous les champs sont optionnels : seuls les champs envoyés sont modifiés,
+    un champ omis reste inchangé. Envoyer explicitement ``null`` efface un
+    champ nullable.
+    """
+
+    id_client: int | None = None
+    date_emission: date | None = None
+    date_echeance: date | None = None
+    devise: str | None = Field(default=None, max_length=3)
+    type_facture: TypeFacture | None = None
+    mode_paiement: str | None = Field(default=None, max_length=50)
+    iban: str | None = Field(default=None, max_length=34)
+    reference_commande: str | None = Field(default=None, max_length=100)
+    notes: str | None = None
+
+    # Si des lignes sont envoyées lors de l'update,
+    # elles remplacent intégralement les anciennes (totaux recalculés).
+    lignes: list[FactureLigneCreate] | None = Field(
+        default=None,
+        min_length=1,
+        description="Nouvelle liste de lignes remplaçant intégralement l'existante",
+    )
+
+    @field_validator("date_emission", "devise", "type_facture")
+    @classmethod
+    def refuse_explicit_null(cls, value: object) -> object:
+        """Champs non nullables en base : un ``null`` explicite est refusé (422)."""
+        if value is None:
+            raise ValueError(
+                "null n'est pas accepté pour ce champ ; "
+                "omettez-le pour le laisser inchangé"
+            )
         return value
 
 

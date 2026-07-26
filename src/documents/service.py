@@ -88,6 +88,8 @@ async def _payload_vers_facture_create(
     return FactureCreate(
         id_document=document.id,
         date_emission=payload.date_emission or date.today(),
+        siret_emetteur=payload.siret_emetteur,
+        siret_destinataire=payload.siret_destinataire,
         iban=payload.iban,
         reference_commande=payload.numero_facture,
         notes="Brouillon généré automatiquement depuis l'analyse OCR.",

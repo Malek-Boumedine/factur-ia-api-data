@@ -118,6 +118,8 @@ async def create_facture_brouillon(
         devise=facture_in.devise,
         type_facture=facture_in.type_facture,
         id_statut=statut_brouillon.id,
+        siret_emetteur=facture_in.siret_emetteur,
+        siret_destinataire=facture_in.siret_destinataire,
         mode_paiement=facture_in.mode_paiement,
         iban=facture_in.iban,
         reference_commande=facture_in.reference_commande,

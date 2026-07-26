@@ -26,6 +26,7 @@ from src.utilisateurs.models import Utilisateur  # noqa: F401  # isort: skip
 
 SIRET_ENTREPRISE = "12345678900011"
 SIRET_DIVERGENT = "99999999900099"
+SIRET_DESTINATAIRE = "83281075800025"
 
 
 class _Result:
@@ -72,6 +73,7 @@ def _setup(
     *,
     siret_extrait: str | None,
     siret_entreprise: str | None = SIRET_ENTREPRISE,
+    siret_destinataire_extrait: str | None = None,
 ) -> tuple[_FakeSession, OcrWebhookPayload, Facture]:
     """Prépare le décor du flux webhook complet, paramétré par les SIRET."""
     document = Document(
@@ -105,6 +107,7 @@ def _setup(
         id_document=3,
         score_confiance=Decimal("0.95"),
         siret_emetteur=siret_extrait,
+        siret_destinataire=siret_destinataire_extrait,
         total_ht=Decimal("10.00"),
         total_tva=Decimal("2.00"),
         total_ttc=Decimal("12.00"),
@@ -149,6 +152,23 @@ async def test_siret_extrait_divergent_conserve() -> None:
     await traiter_callback_ocr(session, payload)  # type: ignore[arg-type]
 
     assert facture.siret_emetteur == SIRET_DIVERGENT
+
+
+async def test_callback_avec_deux_siret_produit_brouillon_avec_les_deux() -> None:
+    """Un callback portant les deux SIRET produit un brouillon qui les porte.
+
+    On vérifie la facture réellement créée par `create_facture_brouillon`
+    (celle ajoutée à la session) : c'est elle qui est persistée en base.
+    """
+    session, payload, _ = _setup(
+        siret_extrait=SIRET_DIVERGENT,
+        siret_destinataire_extrait=SIRET_DESTINATAIRE,
+    )
+    await traiter_callback_ocr(session, payload)  # type: ignore[arg-type]
+
+    brouillon = [obj for obj in session.added if isinstance(obj, Facture)][0]
+    assert brouillon.siret_emetteur == SIRET_DIVERGENT
+    assert brouillon.siret_destinataire == SIRET_DESTINATAIRE
 
 
 async def test_entreprise_sans_siret_reste_none() -> None:
