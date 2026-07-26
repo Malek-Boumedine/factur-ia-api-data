@@ -3,11 +3,13 @@ from collections.abc import Sequence
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
+from sqlalchemy import update
 from sqlalchemy.orm import selectinload
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.clients.models import Client
+from src.documents.models import ExtractionOcr
 from src.entreprises.models import Entreprise
 from src.factures.exceptions import (
     FacturationError,
@@ -240,7 +242,9 @@ async def delete_facture_brouillon(
 
     Seuls les brouillons sont supprimables : une facture validée est
     immuable (inaltérabilité légale) et ne peut jamais être supprimée.
-    Le document source et son extraction OCR ne sont pas touchés (trace).
+    Le document source et son extraction OCR sont conservés (trace) ;
+    l'extraction est simplement détachée de la facture supprimée
+    (sa FK ``id_facture``, nullable, est remise à NULL).
     """
     # 1. Récupérer la facture avec son statut et ses lignes (isolation tenant)
     statement_facture = (
@@ -267,12 +271,26 @@ async def delete_facture_brouillon(
             Seuls les brouillons sont supprimables."
         )
 
-    # 2. Supprimer les lignes explicitement (pas de cascade configurée),
-    # puis la facture.
+    # 2. Détacher les extractions OCR liées : l'extraction est conservée
+    # (trace de ce que l'OCR a lu), seule sa référence facture est effacée.
+    # Sans ce détachement, la FK extraction_ocr.id_facture bloque le DELETE.
+    detach_statement = (
+        update(ExtractionOcr)
+        .where(col(ExtractionOcr.id_facture) == facture_id)
+        .values(id_facture=None)
+    )
+    await session.execute(detach_statement)
+
+    # 3. Supprimer les lignes explicitement (pas de cascade configurée)
     for ligne in list(db_facture.lignes):
         await session.delete(ligne)
-    await session.delete(db_facture)
 
+    # 4. Pousser le détachement et les suppressions de lignes en base
+    # avant le DELETE de la facture (ordre garanti côté MySQL).
+    await session.flush()
+
+    # 5. Supprimer la facture ; le commit scelle la transaction unique.
+    await session.delete(db_facture)
     await session.commit()
 
 

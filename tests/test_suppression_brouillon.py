@@ -2,8 +2,9 @@
 
 Sans base de données ni réseau : app minimale avec le router factures,
 dépendances d'auth et de tenant surchargées, session factice qui restitue des
-résultats prédéfinis et capture les objets supprimés (pour vérifier que les
-lignes puis la facture sont bien supprimées, et rien d'autre).
+résultats prédéfinis et trace les opérations dans l'ordre (pour vérifier que
+le détachement des extractions OCR et les suppressions de lignes précèdent
+bien le DELETE de la facture, et que rien d'autre n'est touché).
 """
 
 from decimal import Decimal
@@ -27,23 +28,35 @@ class _Result:
 
 
 class _FakeSession:
-    """Session factice : dépile des résultats prévus et trace les suppressions."""
+    """Session factice : dépile des résultats prévus et trace chaque opération
+    dans l'ordre d'émission (``operations``) pour vérifier le séquencement."""
 
     def __init__(self, results: list[Any]) -> None:
         self._results = results
         self.statements: list[Any] = []
+        self.executed: list[Any] = []
         self.deleted: list[Any] = []
         self.committed = False
+        self.operations: list[tuple[str, Any]] = []
 
     async def exec(self, statement: Any) -> _Result:
         self.statements.append(statement)
         return _Result(self._results.pop(0))
 
+    async def execute(self, statement: Any) -> None:
+        self.executed.append(statement)
+        self.operations.append(("execute", statement))
+
     async def delete(self, obj: Any) -> None:
         self.deleted.append(obj)
+        self.operations.append(("delete", obj))
+
+    async def flush(self) -> None:
+        self.operations.append(("flush", None))
 
     async def commit(self) -> None:
         self.committed = True
+        self.operations.append(("commit", None))
 
 
 def _facture_brouillon() -> Facture:
@@ -114,7 +127,10 @@ async def _delete(app: FastAPI, facture_id: int = 42) -> Any:
 
 
 async def test_suppression_brouillon_204() -> None:
-    """Brouillon supprimé : 204 sans corps, lignes puis facture supprimées."""
+    """Brouillon supprimé : 204 sans corps, opérations émises dans l'ordre
+    détachement extraction → suppression lignes → flush → suppression facture
+    → commit (l'UPDATE et les DELETE lignes doivent précéder le DELETE facture,
+    sinon la FK extraction_ocr.id_facture bloque en base)."""
     facture = _facture_brouillon()
     session = _FakeSession([facture])
     response = await _delete(_app(session))
@@ -122,9 +138,21 @@ async def test_suppression_brouillon_204() -> None:
     assert response.status_code == 204
     assert response.content == b""
 
-    # Les 2 lignes sont supprimées avant la facture (pas de lignes orphelines),
-    # et rien d'autre n'est supprimé (le document source n'est pas touché).
-    assert len(session.deleted) == 3
+    # Séquencement exact des opérations
+    kinds = [kind for kind, _ in session.operations]
+    assert kinds == ["execute", "delete", "delete", "flush", "delete", "commit"]
+
+    # 1. Détachement : UPDATE extraction_ocr SET id_facture = NULL pour cette
+    # facture — l'extraction est conservée, seule la référence est effacée.
+    detach_statement = session.executed[0]
+    assert "UPDATE extraction_ocr" in str(detach_statement)
+    assert "id_facture" in str(detach_statement)
+    params = detach_statement.compile().params
+    assert params["id_facture"] is None
+    assert 42 in params.values()
+
+    # 2. Puis les 2 lignes, puis la facture (pas de lignes orphelines) ;
+    # rien d'autre n'est supprimé (le document source n'est pas touché).
     assert session.deleted[:2] == facture.lignes
     assert session.deleted[2] is facture
     assert session.committed
@@ -142,8 +170,9 @@ async def test_facture_validee_non_supprimable_409() -> None:
 
     assert response.status_code == 409
     assert "Validée" in response.json()["detail"]
-    # Rien n'a été supprimé ni commité
+    # Rien n'a été supprimé, détaché ni commité
     assert session.deleted == []
+    assert session.executed == []
     assert not session.committed
 
 
