@@ -368,20 +368,34 @@ async def valider_facture_brouillon(
     nouveau_numero = f"{prefixe_mois}{sequence:04d}"  # Formate avec 4 zéros : 0001
 
     # 4. Création des Snapshots (Inaltérabilité)
-    db_entreprise = await session.get(Entreprise, id_entreprise)
-    db_facture.siret_emetteur = db_entreprise.siret if db_entreprise else None
+    if db_facture.id_facture_origine is not None:
+        # Avoir : on refige depuis la facture d'origine, pas depuis les
+        # référentiels courants — l'avoir doit refléter la facture annulée
+        # telle qu'elle a été émise, même si la fiche client a changé depuis.
+        facture_origine = await session.get(Facture, db_facture.id_facture_origine)
+        if facture_origine is not None:
+            db_facture.siret_emetteur = facture_origine.siret_emetteur
+            db_facture.siret_destinataire = facture_origine.siret_destinataire
+            db_facture.snapshot_client = (
+                dict(facture_origine.snapshot_client)
+                if facture_origine.snapshot_client is not None
+                else None
+            )
+    else:
+        db_entreprise = await session.get(Entreprise, id_entreprise)
+        db_facture.siret_emetteur = db_entreprise.siret if db_entreprise else None
 
-    if db_facture.id_client is not None:
-        db_client = await session.get(Client, db_facture.id_client)
-        if db_client:
-            db_facture.siret_destinataire = db_client.siret
-            # On stocke les coordonnées exactes à l'instant T
-            db_facture.snapshot_client = {
-                "raison_sociale": db_client.raison_sociale,
-                "adresse": db_client.adresse,
-                "code_postal": db_client.code_postal,
-                "ville": db_client.ville,
-            }
+        if db_facture.id_client is not None:
+            db_client = await session.get(Client, db_facture.id_client)
+            if db_client:
+                db_facture.siret_destinataire = db_client.siret
+                # On stocke les coordonnées exactes à l'instant T
+                db_facture.snapshot_client = {
+                    "raison_sociale": db_client.raison_sociale,
+                    "adresse": db_client.adresse,
+                    "code_postal": db_client.code_postal,
+                    "ville": db_client.ville,
+                }
 
     # 5. Mise à jour de la facture
     db_facture.numero_facture = nouveau_numero
@@ -467,6 +481,13 @@ async def generer_avoir_brouillon(
         id_statut=statut_brouillon.id,
         mode_paiement=facture_origine.mode_paiement,
         iban=facture_origine.iban,
+        # L'avoir fige l'état de la facture annulée : on recopie les snapshots
+        # de l'origine (copie du dict JSON, pas de référence partagée)
+        siret_emetteur=facture_origine.siret_emetteur,
+        siret_destinataire=facture_origine.siret_destinataire,
+        snapshot_client=dict(facture_origine.snapshot_client)
+        if facture_origine.snapshot_client is not None
+        else None,
         # Traçabilité lisible (la source de vérité reste id_facture_origine)
         reference_commande=f"Réf. Facture : {facture_origine.numero_facture}",
         notes="Avoir généré suite à une annulation ou modification.",

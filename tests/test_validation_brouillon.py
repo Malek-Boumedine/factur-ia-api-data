@@ -4,7 +4,9 @@ Sans base de données ni réseau : mêmes doublures que les autres tests facture
 Couvre les refus de ``POST /valider`` (facture non-brouillon, brouillon
 incomplet sans client) et de ``POST /avoir`` (facture source non validée),
 tous alignés sur 409, plus le 404 hors périmètre et la non-régression des
-snapshots SIRET (« le brouillon propose, la validation impose »).
+snapshots SIRET (« le brouillon propose, la validation impose »). Pour les
+avoirs : recopie des snapshots depuis la facture d'origine à la génération,
+et refige depuis l'origine (pas les référentiels courants) à la validation.
 """
 
 from decimal import Decimal
@@ -30,7 +32,11 @@ class _Result:
 
 
 class _FakeSession:
-    """Session factice : dépile des résultats prévus et trace les requêtes."""
+    """Session factice : dépile des résultats prévus et trace les requêtes.
+
+    Un résultat callable est évalué avec la session au moment du ``exec``,
+    ce qui permet de renvoyer un objet ajouté plus tôt via ``add``.
+    """
 
     def __init__(
         self, results: list[Any], gets: dict[tuple[Any, Any], Any] | None = None
@@ -38,13 +44,26 @@ class _FakeSession:
         self._results = results
         self._gets = gets or {}
         self.statements: list[Any] = []
+        self.added: list[Any] = []
 
     async def exec(self, statement: Any) -> _Result:
         self.statements.append(statement)
-        return _Result(self._results.pop(0))
+        value = self._results.pop(0)
+        if callable(value):
+            value = value(self)
+        return _Result(value)
 
     async def get(self, model: Any, key: Any) -> Any:
         return self._gets.get((model, key))
+
+    def add(self, obj: Any) -> None:
+        self.added.append(obj)
+
+    async def flush(self) -> None:
+        # Simule l'attribution d'une clé primaire par la base
+        for index, obj in enumerate(self.added):
+            if getattr(obj, "id", None) is None:
+                obj.id = 100 + index
 
     async def commit(self) -> None:
         pass
@@ -162,3 +181,87 @@ async def test_avoir_sur_facture_non_validee_409() -> None:
 
     assert response.status_code == 409
     assert "Validée" in response.json()["detail"]
+
+
+async def test_avoir_genere_recopie_les_snapshots_de_l_origine() -> None:
+    """L'avoir généré porte les SIRET et le snapshot client de la facture
+    d'origine (copie du dict, pas de référence partagée)."""
+    origine = _facture("Validée", id_client=7)
+    origine.siret_emetteur = "33333333333333"
+    origine.siret_destinataire = "44444444444444"
+    origine.snapshot_client = {"raison_sociale": "Client SA", "ville": "Paris"}
+    origine.lignes = []
+
+    session = _FakeSession(
+        # facture d'origine, statut "Brouillon", rechargement final (l'avoir
+        # ajouté à la session)
+        [
+            origine,
+            StatutFacture(id=1, libelle="Brouillon"),
+            lambda s: s.added[0],
+        ]
+    )
+    app = _app(session)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/factures/42/avoir")
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["siret_emetteur"] == "33333333333333"
+    assert body["siret_destinataire"] == "44444444444444"
+    assert body["snapshot_client"] == {
+        "raison_sociale": "Client SA",
+        "ville": "Paris",
+    }
+    avoir = session.added[0]
+    assert avoir.snapshot_client is not origine.snapshot_client
+
+
+async def test_validation_avoir_refige_depuis_l_origine() -> None:
+    """À la validation d'un avoir, les snapshots sont refigés depuis la facture
+    d'origine — pas depuis l'entreprise ni la fiche client actuelle, même si
+    celle-ci a changé depuis l'émission de la facture annulée."""
+    avoir = _facture("Brouillon", id_client=7)
+    avoir.id_facture_origine = 41
+    avoir.lignes = []
+
+    origine = _facture("Validée", id_client=7)
+    origine.id = 41
+    origine.siret_emetteur = "33333333333333"
+    origine.siret_destinataire = "44444444444444"
+    origine.snapshot_client = {"raison_sociale": "Ancien Nom", "ville": "Paris"}
+
+    # Référentiels courants, différents de l'origine : ils doivent être ignorés
+    entreprise = Entreprise(
+        id=1, nom_entreprise="Mon Entreprise", siret="99999999999999"
+    )
+    client_modifie = Client(
+        id=7,
+        id_entreprise=1,
+        id_createur=1,
+        raison_sociale="Nouveau Nom",
+        siret="88888888888888",
+        code_postal="69001",
+        ville="Lyon",
+    )
+    session = _FakeSession(
+        [avoir, StatutFacture(id=2, libelle="Validée"), None, avoir],
+        gets={
+            (Facture, 41): origine,
+            (Entreprise, 1): entreprise,
+            (Client, 7): client_modifie,
+        },
+    )
+    response = await _valider(_app(session))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["siret_emetteur"] == "33333333333333"
+    assert body["siret_destinataire"] == "44444444444444"
+    assert body["snapshot_client"] == {
+        "raison_sociale": "Ancien Nom",
+        "ville": "Paris",
+    }
+    assert avoir.snapshot_client is not origine.snapshot_client
