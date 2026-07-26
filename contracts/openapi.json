@@ -2870,6 +2870,56 @@
         ]
       }
     },
+    "/entreprises/me": {
+      "get": {
+        "tags": [
+          "Entreprises"
+        ],
+        "summary": "Get Entreprise Active Endpoint",
+        "description": "Renvoie l'entreprise active (espace de travail courant), résolue via le\nheader `x-entreprise-id` après contrôle d'appartenance. Donne au client\nweb accès aux informations légales de l'émetteur (SIRET notamment).",
+        "operationId": "get_entreprise_active",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/entreprises/": {
       "post": {
         "tags": [

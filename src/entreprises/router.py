@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.database import get_session
 from src.entreprises.exceptions import (
     ConfigurationManquanteError,
@@ -16,6 +16,29 @@ from src.entreprises.service import create_entreprise
 from src.utilisateurs.models import Utilisateur
 
 router = APIRouter(prefix="/entreprises", tags=["Entreprises"])
+
+
+@router.get(
+    "/me",
+    response_model=EntrepriseRead,
+    operation_id="get_entreprise_active",
+)
+async def get_entreprise_active_endpoint(
+    entreprise_id: Annotated[int, Depends(verify_tenant_access)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> Entreprise:
+    """
+    Renvoie l'entreprise active (espace de travail courant), résolue via le
+    header `x-entreprise-id` après contrôle d'appartenance. Donne au client
+    web accès aux informations légales de l'émetteur (SIRET notamment).
+    """
+    entreprise = await session.get(Entreprise, entreprise_id)
+    if entreprise is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Entreprise introuvable.",
+        )
+    return entreprise
 
 
 @router.post(
