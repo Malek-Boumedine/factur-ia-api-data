@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.factures.models import TypeFacture
 
@@ -94,23 +94,40 @@ class FactureCreate(FactureBase):
 
 class FactureUpdate(BaseModel):
     """
-    Schéma pour la mise à jour d'un brouillon de facture.
-    Tous les champs sont optionnels.
+    Schéma pour la mise à jour d'un brouillon de facture (sémantique PATCH).
+    Tous les champs sont optionnels : seuls les champs envoyés sont modifiés,
+    un champ omis reste inchangé. Envoyer explicitement ``null`` efface un
+    champ nullable.
     """
 
     id_client: int | None = None
     date_emission: date | None = None
     date_echeance: date | None = None
-    mode_paiement: str | None = None
-    iban: str | None = None
-    reference_commande: str | None = None
+    devise: str | None = Field(default=None, max_length=3)
+    type_facture: TypeFacture | None = None
+    mode_paiement: str | None = Field(default=None, max_length=50)
+    iban: str | None = Field(default=None, max_length=34)
+    reference_commande: str | None = Field(default=None, max_length=100)
     notes: str | None = None
 
     # Si des lignes sont envoyées lors de l'update,
-    # elles écraseront les anciennes.
+    # elles remplacent intégralement les anciennes (totaux recalculés).
     lignes: list[FactureLigneCreate] | None = Field(
-        default=None, description="Nouvelle liste de lignes pour remplacer l'existante"
+        default=None,
+        min_length=1,
+        description="Nouvelle liste de lignes remplaçant intégralement l'existante",
     )
+
+    @field_validator("date_emission", "devise", "type_facture")
+    @classmethod
+    def refuse_explicit_null(cls, value: object) -> object:
+        """Champs non nullables en base : un ``null`` explicite est refusé (422)."""
+        if value is None:
+            raise ValueError(
+                "null n'est pas accepté pour ce champ ; "
+                "omettez-le pour le laisser inchangé"
+            )
+        return value
 
 
 class FactureRead(FactureBase):

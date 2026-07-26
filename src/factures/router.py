@@ -9,16 +9,19 @@ from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.database import get_session
 from src.factures.exceptions import (
     FacturationError,
+    FactureIncompleteError,
     FactureNotFoundError,
     StatutNonConfigureError,
     TauxTvaIntrouvableError,
     TransitionStatutInvalideError,
+    TypeFactureNonModifiableError,
 )
 from src.factures.models import Facture
-from src.factures.schemas import FactureCreate, FactureReadWithLignes
+from src.factures.schemas import FactureCreate, FactureReadWithLignes, FactureUpdate
 from src.factures.service import (
     create_facture_brouillon,
     generer_avoir_brouillon,
+    update_facture_brouillon,
     valider_facture_brouillon,
 )
 from src.utilisateurs.models import Utilisateur
@@ -96,6 +99,46 @@ async def get_facture(
     return db_facture
 
 
+@router.patch("/{facture_id}", response_model=FactureReadWithLignes)
+async def update_brouillon_endpoint(
+    facture_id: int,
+    facture_in: FactureUpdate,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+) -> Any:
+    """
+    Modifie un brouillon de facture : champs d'en-tête et, si fournies,
+    remplacement complet des lignes (totaux recalculés).
+
+    Seuls les brouillons sont modifiables : toute tentative sur une facture
+    validée est refusée (409, inaltérabilité légale).
+    """
+    try:
+        facture_modifiee = await update_facture_brouillon(
+            session=session,
+            facture_id=facture_id,
+            facture_in=facture_in,
+            id_entreprise=id_entreprise,
+        )
+        return facture_modifiee
+
+    except FactureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+    except (TransitionStatutInvalideError, TypeFactureNonModifiableError) as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+    except TauxTvaIntrouvableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
+
+    except FacturationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        ) from e
+
+
 @router.post(
     "/{facture_id}/valider",
     response_model=FactureReadWithLignes,
@@ -109,6 +152,9 @@ async def valider_brouillon_endpoint(
     """
     Valide un brouillon de facture.
     Génère le numéro définitif et fige les données du client (Snapshot).
+
+    Refusé (409) si la facture n'est pas un brouillon ou si le brouillon
+    est incomplet (aucun client associé).
     """
     try:
         facture_validee = await valider_facture_brouillon(
@@ -121,10 +167,8 @@ async def valider_brouillon_endpoint(
     except FactureNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
-    except TransitionStatutInvalideError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        ) from e
+    except (TransitionStatutInvalideError, FactureIncompleteError) as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except (StatutNonConfigureError, FacturationError) as e:
         raise HTTPException(
@@ -145,6 +189,8 @@ async def generer_avoir_endpoint(
 ) -> Any:
     """
     Génère un avoir (en brouillon) à partir d'une facture validée.
+
+    Refusé (409) si la facture source n'est pas au statut 'Validée'.
     """
     try:
         if current_user.id is None:
@@ -162,9 +208,7 @@ async def generer_avoir_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
     except TransitionStatutInvalideError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-        ) from e
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except (StatutNonConfigureError, FacturationError) as e:
         raise HTTPException(

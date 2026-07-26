@@ -2278,6 +2278,73 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Update Brouillon Endpoint",
+        "description": "Modifie un brouillon de facture : champs d'en-tête et, si fournies,\nremplacement complet des lignes (totaux recalculés).\n\nSeuls les brouillons sont modifiables : toute tentative sur une facture\nvalidée est refusée (409, inaltérabilité légale).",
+        "operationId": "update_brouillon_endpoint_factures__facture_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactureUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactureReadWithLignes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/factures/{facture_id}/valider": {
@@ -2286,7 +2353,7 @@
           "Gestion des Factures"
         ],
         "summary": "Valider Brouillon Endpoint",
-        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).",
+        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).\n\nRefusé (409) si la facture n'est pas un brouillon ou si le brouillon\nest incomplet (aucun client associé).",
         "operationId": "valider_brouillon_endpoint_factures__facture_id__valider_post",
         "security": [
           {
@@ -2345,7 +2412,7 @@
           "Gestion des Factures"
         ],
         "summary": "Generer Avoir Endpoint",
-        "description": "Génère un avoir (en brouillon) à partir d'une facture validée.",
+        "description": "Génère un avoir (en brouillon) à partir d'une facture validée.\n\nRefusé (409) si la facture source n'est pas au statut 'Validée'.",
         "operationId": "generer_avoir_endpoint_factures__facture_id__avoir_post",
         "security": [
           {
@@ -4392,6 +4459,133 @@
         ],
         "title": "FactureReadWithLignes",
         "description": "Schéma détaillé d'une facture incluant toutes ses lignes.\nIdéal pour l'affichage de la page de détail d'une facture spécifique."
+      },
+      "FactureUpdate": {
+        "properties": {
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client"
+          },
+          "date_emission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance"
+          },
+          "devise": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Devise"
+          },
+          "type_facture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypeFacture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode_paiement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Paiement"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 34
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "reference_commande": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Commande"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "lignes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FactureLigneCreate"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lignes",
+            "description": "Nouvelle liste de lignes remplaçant intégralement l'existante"
+          }
+        },
+        "type": "object",
+        "title": "FactureUpdate",
+        "description": "Schéma pour la mise à jour d'un brouillon de facture (sémantique PATCH).\nTous les champs sont optionnels : seuls les champs envoyés sont modifiés,\nun champ omis reste inchangé. Envoyer explicitement ``null`` efface un\nchamp nullable."
       },
       "HTTPValidationError": {
         "properties": {
