@@ -230,6 +230,52 @@ async def update_facture_brouillon(
     return facture_complete
 
 
+async def delete_facture_brouillon(
+    session: AsyncSession,
+    facture_id: int,
+    id_entreprise: int,
+) -> None:
+    """
+    Supprime un brouillon de facture et ses lignes.
+
+    Seuls les brouillons sont supprimables : une facture validée est
+    immuable (inaltérabilité légale) et ne peut jamais être supprimée.
+    Le document source et son extraction OCR ne sont pas touchés (trace).
+    """
+    # 1. Récupérer la facture avec son statut et ses lignes (isolation tenant)
+    statement_facture = (
+        select(Facture)
+        .where(Facture.id == facture_id)
+        .where(Facture.id_entreprise == id_entreprise)
+        .options(
+            selectinload(Facture.statut_ref),  # type: ignore
+            selectinload(Facture.lignes),  # type: ignore
+        )
+    )
+    result_facture = await session.exec(statement_facture)
+    db_facture = result_facture.first()
+
+    if db_facture is None:
+        raise FactureNotFoundError("Facture introuvable dans cet espace entreprise")
+
+    if db_facture.statut_ref is None or db_facture.statut_ref.libelle != "Brouillon":
+        statut_actuel = (
+            db_facture.statut_ref.libelle if db_facture.statut_ref else "Inconnu"
+        )
+        raise TransitionStatutInvalideError(
+            f"Impossible de supprimer une facture au statut '{statut_actuel}'. \
+            Seuls les brouillons sont supprimables."
+        )
+
+    # 2. Supprimer les lignes explicitement (pas de cascade configurée),
+    # puis la facture.
+    for ligne in list(db_facture.lignes):
+        await session.delete(ligne)
+    await session.delete(db_facture)
+
+    await session.commit()
+
+
 async def valider_facture_brouillon(
     session: AsyncSession,
     facture_id: int,

@@ -2530,6 +2530,56 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Delete Brouillon Endpoint",
+        "description": "Supprime un brouillon de facture et ses lignes.\n\nRefusé (409) si la facture n'est pas un brouillon : une facture validée\nest immuable et ne peut jamais être supprimée (inaltérabilité légale).\nLe document source et son extraction OCR sont conservés (trace).",
+        "operationId": "delete_brouillon_endpoint_factures__facture_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/factures/{facture_id}/valider": {

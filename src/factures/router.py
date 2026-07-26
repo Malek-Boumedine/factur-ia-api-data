@@ -28,6 +28,7 @@ from src.factures.schemas import (
 )
 from src.factures.service import (
     create_facture_brouillon,
+    delete_facture_brouillon,
     generer_avoir_brouillon,
     update_facture_brouillon,
     valider_facture_brouillon,
@@ -223,6 +224,38 @@ async def update_brouillon_endpoint(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
         ) from e
+
+    except FacturationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        ) from e
+
+
+@router.delete("/{facture_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_brouillon_endpoint(
+    facture_id: int,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+) -> None:
+    """
+    Supprime un brouillon de facture et ses lignes.
+
+    Refusé (409) si la facture n'est pas un brouillon : une facture validée
+    est immuable et ne peut jamais être supprimée (inaltérabilité légale).
+    Le document source et son extraction OCR sont conservés (trace).
+    """
+    try:
+        await delete_facture_brouillon(
+            session=session,
+            facture_id=facture_id,
+            id_entreprise=id_entreprise,
+        )
+
+    except FactureNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+
+    except TransitionStatutInvalideError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except FacturationError as e:
         raise HTTPException(
