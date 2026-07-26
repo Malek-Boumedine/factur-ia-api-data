@@ -15,6 +15,7 @@ from src.documents.models import (
     StatutExtraction,
 )
 from src.documents.schemas import OcrWebhookPayload
+from src.entreprises.models import Entreprise
 from src.factures.exceptions import FacturationError
 from src.factures.models import TauxTva
 from src.factures.schemas import FactureCreate, FactureLigneCreate
@@ -140,6 +141,15 @@ async def traiter_callback_ocr(
     except (FacturationError, ValidationError):
         await session.rollback()
         return await _enregistrer_echec(session, payload)
+
+    # Réconciliation du SIRET émetteur : l'émetteur est toujours l'entreprise
+    # détentrice de l'abonnement. Le brouillon garde la valeur lue par l'OCR
+    # (le front la compare au SIRET de l'entreprise et signale toute
+    # divergence) ; à défaut, il propose le SIRET de l'entreprise. Dans tous
+    # les cas, la validation écrasera depuis l'entreprise (elle fait autorité).
+    entreprise = await session.get(Entreprise, document.id_entreprise)
+    siret_entreprise = entreprise.siret if entreprise else None
+    facture.siret_emetteur = payload.siret_emetteur or siret_entreprise
 
     # Succès : on fige le statut et on lie l'extraction au brouillon créé
     document.statut = StatutDocument.TRAITE
