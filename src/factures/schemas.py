@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.factures.models import TypeFacture
+from src.factures.models import Facture, TypeFacture
 
 
 class FactureLigneBase(BaseModel):
@@ -159,6 +159,36 @@ class FactureRead(FactureBase):
     date_modification: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FactureListItem(FactureRead):
+    """
+    Élément de la liste des factures : ``FactureRead`` enrichi du nom du
+    destinataire résolu, pour que le front affiche un nom sur chaque ligne
+    sans requête supplémentaire.
+    """
+
+    nom_destinataire: str | None = Field(
+        default=None,
+        description="Raison sociale du destinataire : snapshot figé pour une "
+        "facture validée, sinon client lié (brouillon)",
+    )
+
+    @classmethod
+    def from_facture(cls, facture: Facture) -> "FactureListItem":
+        """Construit l'élément de liste en résolvant le nom du destinataire.
+
+        Le snapshot (données figées à la validation) est prioritaire ; à
+        défaut, on lit la raison sociale du client lié (cas des brouillons).
+        La relation ``facture.client`` doit avoir été chargée en eager.
+        """
+        snapshot = facture.snapshot_client or {}
+        nom: str | None = snapshot.get("raison_sociale")
+        if not nom and facture.client is not None:
+            nom = facture.client.raison_sociale
+        item = cls.model_validate(facture)
+        item.nom_destinataire = nom
+        return item
 
 
 class FactureReadWithLignes(FactureRead):

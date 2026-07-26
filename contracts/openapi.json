@@ -2219,6 +2219,191 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "List Factures",
+        "description": "Récupère les factures de l'entreprise active, avec recherche, filtres et\npagination — les plus récentes d'abord. La recherche et les filtres\ns'appliquent toujours à l'intérieur du périmètre de l'entreprise\n(isolation tenant).\n\nChaque élément expose ``nom_destinataire`` : snapshot figé pour une\nfacture validée, raison sociale du client lié pour un brouillon.",
+        "operationId": "list_factures_factures__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur numéro de facture, référence de commande ou raison sociale du client.",
+              "title": "Search"
+            },
+            "description": "Recherche sur numéro de facture, référence de commande ou raison sociale du client."
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée).",
+              "title": "Statut"
+            },
+            "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée)."
+          },
+          {
+            "name": "type_facture",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TypeFacture"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le type de document (facture ou avoir).",
+              "title": "Type Facture"
+            },
+            "description": "Filtre sur le type de document (facture ou avoir)."
+          },
+          {
+            "name": "id_client",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le client destinataire.",
+              "title": "Id Client"
+            },
+            "description": "Filtre sur le client destinataire."
+          },
+          {
+            "name": "date_emission_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne basse (incluse) sur la date d'émission.",
+              "title": "Date Emission Min"
+            },
+            "description": "Borne basse (incluse) sur la date d'émission."
+          },
+          {
+            "name": "date_emission_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne haute (incluse) sur la date d'émission.",
+              "title": "Date Emission Max"
+            },
+            "description": "Borne haute (incluse) sur la date d'émission."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_FactureListItem_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/factures/{facture_id}": {
@@ -4230,6 +4415,241 @@
         "title": "FactureLigneRead",
         "description": "Schéma pour la lecture d'une ligne\nde facture avec ses montants calculés."
       },
+      "FactureListItem": {
+        "properties": {
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client",
+            "description": "Client destinataire de la facture"
+          },
+          "id_document": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Document",
+            "description": "Document source si issue d'une extraction OCR"
+          },
+          "date_emission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance",
+            "description": "Date limite de paiement"
+          },
+          "devise": {
+            "type": "string",
+            "maxLength": 3,
+            "title": "Devise",
+            "default": "EUR"
+          },
+          "type_facture": {
+            "$ref": "#/components/schemas/TypeFacture",
+            "default": "facture"
+          },
+          "mode_paiement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Paiement"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 34
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "reference_commande": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Commande"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Notes internes ou mentions spécifiques"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_entreprise": {
+            "type": "integer",
+            "title": "Id Entreprise"
+          },
+          "id_createur": {
+            "type": "integer",
+            "title": "Id Createur"
+          },
+          "numero_facture": {
+            "type": "string",
+            "title": "Numero Facture"
+          },
+          "id_statut": {
+            "type": "integer",
+            "title": "Id Statut"
+          },
+          "id_facture_origine": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Facture Origine",
+            "description": "Facture d'origine si ce document est un avoir"
+          },
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
+          "snapshot_client": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Client"
+          },
+          "total_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ht"
+          },
+          "total_tva": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Tva"
+          },
+          "total_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ttc"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Modification"
+          },
+          "nom_destinataire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom Destinataire",
+            "description": "Raison sociale du destinataire : snapshot figé pour une facture validée, sinon client lié (brouillon)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "id_entreprise",
+          "id_createur",
+          "numero_facture",
+          "id_statut",
+          "total_ht",
+          "total_tva",
+          "total_ttc",
+          "date_creation"
+        ],
+        "title": "FactureListItem",
+        "description": "Élément de la liste des factures : ``FactureRead`` enrichi du nom du\ndestinataire résolu, pour que le front affiche un nom sur chaque ligne\nsans requête supplémentaire."
+      },
       "FactureReadWithLignes": {
         "properties": {
           "id_client": {
@@ -4872,6 +5292,37 @@
           "limit"
         ],
         "title": "Page[ClientRead]"
+      },
+      "Page_FactureListItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FactureListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[FactureListItem]"
       },
       "ProfilUpdate": {
         "properties": {
