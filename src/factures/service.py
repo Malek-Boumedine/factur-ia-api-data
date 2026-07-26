@@ -20,7 +20,13 @@ from src.factures.exceptions import (
     TransitionStatutInvalideError,
     TypeFactureNonModifiableError,
 )
-from src.factures.models import Facture, FactureLigne, StatutFacture, TauxTva
+from src.factures.models import (
+    Facture,
+    FactureLigne,
+    StatutFacture,
+    TauxTva,
+    TypeFacture,
+)
 from src.factures.schemas import FactureCreate, FactureLigneCreate, FactureUpdate
 
 
@@ -345,9 +351,12 @@ async def valider_facture_brouillon(
             "Le statut 'Validée' n'est pas configuré en base de données."
         )
 
-    # 3. Génération du numéro définitif (Format: FAC-YYYYMM-XXXX)
+    # 3. Génération du numéro définitif (Format: FAC-YYYYMM-XXXX ou AV-YYYYMM-XXXX)
+    # Séries distinctes factures/avoirs (BOI-TVA-DECLA-30-20-20-10) : chaque
+    # série reste continue, le filtre par préfixe sépare les deux compteurs.
     maintenant = datetime.now()
-    prefixe_mois = f"FAC-{maintenant.strftime('%Y%m')}-"
+    prefixe_type = "AV" if db_facture.type_facture == TypeFacture.AVOIR else "FAC"
+    prefixe_mois = f"{prefixe_type}-{maintenant.strftime('%Y%m')}-"
 
     # Chercher la dernière facture de ce mois pour calculer la suite
     stmt_last_facture = (
