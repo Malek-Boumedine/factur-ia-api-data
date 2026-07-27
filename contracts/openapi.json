@@ -2225,7 +2225,7 @@
           "Gestion des Factures"
         ],
         "summary": "List Factures",
-        "description": "Récupère les factures de l'entreprise active, avec recherche, filtres et\npagination — les plus récentes d'abord. La recherche et les filtres\ns'appliquent toujours à l'intérieur du périmètre de l'entreprise\n(isolation tenant).\n\nChaque élément expose ``nom_destinataire`` : snapshot figé pour une\nfacture validée, raison sociale du client lié pour un brouillon.",
+        "description": "Récupère les factures de l'entreprise active, avec recherche, filtres et\npagination — les plus récentes d'abord. La recherche et les filtres\ns'appliquent toujours à l'intérieur du périmètre de l'entreprise\n(isolation tenant).\n\nChaque élément expose ``nom_destinataire`` (snapshot figé pour une\nfacture validée, raison sociale du client lié pour un brouillon) et\n``libelle_statut`` (libellé du référentiel, pour le badge de statut).",
         "operationId": "list_factures_factures__get",
         "security": [
           {
@@ -2264,10 +2264,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée).",
+              "description": "Filtre sur le libellé du statut (insensible à la casse). Cas particulier : 'Validée' (ou 'validee'/'validees') sélectionne toute la famille non-brouillon (validée, payee, en_retard, statuts PDP…) pour l'onglet « Validées ». Toute autre valeur filtre sur le libellé exact (ex: Brouillon, payee, en_retard).",
               "title": "Statut"
             },
-            "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée)."
+            "description": "Filtre sur le libellé du statut (insensible à la casse). Cas particulier : 'Validée' (ou 'validee'/'validees') sélectionne toute la famille non-brouillon (validée, payee, en_retard, statuts PDP…) pour l'onglet « Validées ». Toute autre valeur filtre sur le libellé exact (ex: Brouillon, payee, en_retard)."
           },
           {
             "name": "type_facture",
@@ -4999,6 +4999,18 @@
             ],
             "title": "Nom Destinataire",
             "description": "Raison sociale du destinataire : snapshot figé pour une facture validée, sinon client lié (brouillon)"
+          },
+          "libelle_statut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle Statut",
+            "description": "Libellé du statut tel que stocké dans le référentiel (ex: brouillon, validée, payee, en_retard) ; clé à mapper côté front pour l'affichage du badge. Null si le référentiel est incohérent."
           }
         },
         "type": "object",

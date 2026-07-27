@@ -95,7 +95,13 @@ async def list_factures(
     ] = None,
     statut: Annotated[
         str | None,
-        Query(description="Filtre sur le libellé du statut (ex: Brouillon, Validée)."),
+        Query(
+            description="Filtre sur le libellé du statut (insensible à la casse). "
+            "Cas particulier : 'Validée' (ou 'validee'/'validees') sélectionne "
+            "toute la famille non-brouillon (validée, payee, en_retard, statuts "
+            "PDP…) pour l'onglet « Validées ». Toute autre valeur filtre sur le "
+            "libellé exact (ex: Brouillon, payee, en_retard)."
+        ),
     ] = None,
     type_facture: Annotated[
         TypeFacture | None,
@@ -120,23 +126,35 @@ async def list_factures(
     s'appliquent toujours à l'intérieur du périmètre de l'entreprise
     (isolation tenant).
 
-    Chaque élément expose ``nom_destinataire`` : snapshot figé pour une
-    facture validée, raison sociale du client lié pour un brouillon.
+    Chaque élément expose ``nom_destinataire`` (snapshot figé pour une
+    facture validée, raison sociale du client lié pour un brouillon) et
+    ``libelle_statut`` (libellé du référentiel, pour le badge de statut).
     """
     # Left join client : recherche sur la raison sociale sans exclure les
-    # factures sans client. Eager load pour résoudre nom_destinataire.
+    # factures sans client. Eager load pour résoudre nom_destinataire et
+    # libelle_statut sans N+1.
     statement = (
         select(Facture)
         .where(Facture.id_entreprise == id_entreprise)
         .join(Client, onclause=col(Facture.id_client) == col(Client.id), isouter=True)
-        .options(selectinload(Facture.client))  # type: ignore
+        .options(
+            selectinload(Facture.client),  # type: ignore
+            selectinload(Facture.statut_ref),  # type: ignore
+        )
     )
 
     if statut is not None:
-        # ilike sans joker : égalité insensible à la casse sur le libellé
         statement = statement.join(
             StatutFacture, onclause=col(Facture.id_statut) == col(StatutFacture.id)
-        ).where(col(StatutFacture.libelle).ilike(statut))
+        )
+        if statut.lower() in {"validée", "validee", "validees"}:
+            # Onglet « Validées » : toute la famille non-brouillon, car une
+            # facture validée qui progresse (payee, en_retard, statuts PDP…)
+            # doit rester visible dans cet onglet.
+            statement = statement.where(~col(StatutFacture.libelle).ilike("brouillon"))
+        else:
+            # ilike sans joker : égalité insensible à la casse sur le libellé
+            statement = statement.where(col(StatutFacture.libelle).ilike(statut))
     if type_facture is not None:
         statement = statement.where(Facture.type_facture == type_facture)
     if id_client is not None:

@@ -203,14 +203,22 @@ class FactureListItem(FactureRead):
         description="Raison sociale du destinataire : snapshot figé pour une "
         "facture validée, sinon client lié (brouillon)",
     )
+    libelle_statut: str | None = Field(
+        default=None,
+        description="Libellé du statut tel que stocké dans le référentiel "
+        "(ex: brouillon, validée, payee, en_retard) ; clé à mapper côté front "
+        "pour l'affichage du badge. Null si le référentiel est incohérent.",
+    )
 
     @classmethod
     def from_facture(cls, facture: Facture) -> "FactureListItem":
-        """Construit l'élément de liste en résolvant le nom du destinataire.
+        """Construit l'élément de liste en résolvant le nom du destinataire
+        et le libellé du statut.
 
         Le snapshot (données figées à la validation) est prioritaire ; à
         défaut, on lit la raison sociale du client lié (cas des brouillons).
-        La relation ``facture.client`` doit avoir été chargée en eager.
+        Les relations ``facture.client`` et ``facture.statut_ref`` doivent
+        avoir été chargées en eager.
         """
         snapshot = facture.snapshot_client or {}
         nom: str | None = snapshot.get("raison_sociale")
@@ -218,6 +226,9 @@ class FactureListItem(FactureRead):
             nom = facture.client.raison_sociale
         item = cls.model_validate(facture)
         item.nom_destinataire = nom
+        # Référentiel incohérent (statut orphelin) : null plutôt qu'un 500.
+        statut_ref = facture.statut_ref
+        item.libelle_statut = statut_ref.libelle if statut_ref is not None else None
         return item
 
 

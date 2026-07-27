@@ -107,7 +107,9 @@ class Facture(SQLModel, table=True):
         back_populates="facture",
         sa_relationship_kwargs={"order_by": "FactureLigne.ordre"},
     )
-    statut_ref: "StatutFacture" = Relationship()
+    # Optional : la FK est non-nullable mais la relation peut ne pas se
+    # résoudre si le référentiel est incohérent (les appelants gardent le None)
+    statut_ref: Optional["StatutFacture"] = Relationship()
     createur: "Utilisateur" = Relationship()
     entreprise: "Entreprise" = Relationship()
     client: Optional["Client"] = Relationship()
