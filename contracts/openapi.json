@@ -2588,7 +2588,7 @@
           "Gestion des Factures"
         ],
         "summary": "Valider Brouillon Endpoint",
-        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).\n\nRefusé (409) si la facture n'est pas un brouillon ou si le brouillon\nest incomplet (aucun client associé).",
+        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).\n\nRefusé (409) si la facture n'est pas un brouillon, si le brouillon est\nincomplet (aucun client associé), ou en cas de conflit de numérotation\npersistant lors de validations simultanées (réessayer la requête).",
         "operationId": "valider_brouillon_endpoint_factures__facture_id__valider_post",
         "security": [
           {

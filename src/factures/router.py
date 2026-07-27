@@ -14,6 +14,7 @@ from src.factures.exceptions import (
     FacturationError,
     FactureIncompleteError,
     FactureNotFoundError,
+    NumerotationConcurrenceError,
     StatutNonConfigureError,
     TauxTvaIntrouvableError,
     TransitionStatutInvalideError,
@@ -277,8 +278,9 @@ async def valider_brouillon_endpoint(
     Valide un brouillon de facture.
     Génère le numéro définitif et fige les données du client (Snapshot).
 
-    Refusé (409) si la facture n'est pas un brouillon ou si le brouillon
-    est incomplet (aucun client associé).
+    Refusé (409) si la facture n'est pas un brouillon, si le brouillon est
+    incomplet (aucun client associé), ou en cas de conflit de numérotation
+    persistant lors de validations simultanées (réessayer la requête).
     """
     try:
         facture_validee = await valider_facture_brouillon(
@@ -291,7 +293,11 @@ async def valider_brouillon_endpoint(
     except FactureNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
 
-    except (TransitionStatutInvalideError, FactureIncompleteError) as e:
+    except (
+        TransitionStatutInvalideError,
+        FactureIncompleteError,
+        NumerotationConcurrenceError,
+    ) as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     except (StatutNonConfigureError, FacturationError) as e:
