@@ -4,7 +4,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import JSON, TEXT, Column, DateTime, Numeric
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 from src.documents.models import Document
 
@@ -53,6 +53,11 @@ class Facture(SQLModel, table=True):
     """
 
     __tablename__ = "facture"
+    __table_args__ = (
+        UniqueConstraint(
+            "id_entreprise", "numero_facture", name="unique_entreprise_numero_facture"
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
 
@@ -67,7 +72,7 @@ class Facture(SQLModel, table=True):
         default=None, foreign_key="facture.id", index=True
     )
 
-    numero_facture: str = Field(unique=True, index=True, max_length=50)
+    numero_facture: str = Field(index=True, max_length=50)
     date_emission: date = Field(default_factory=date.today)
     date_echeance: date | None = Field(default=None)
     devise: str = Field(default="EUR", max_length=3)
