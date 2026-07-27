@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.7.0"
+    "version": "1.8.0"
   },
   "paths": {
     "/auth/token": {
@@ -2762,6 +2762,101 @@
         }
       }
     },
+    "/documents/": {
+      "get": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "List Documents",
+        "description": "Liste les documents uploadés de l'entreprise active, avec filtre par\nstatut et pagination — les plus récents d'abord. Le filtre s'applique\ntoujours à l'intérieur du périmètre de l'entreprise (isolation tenant).\n\nChaque élément expose ``id_facture`` : l'id du brouillon généré par\nl'OCR pour un document traité, null sinon (même sémantique que la\nroute de suivi).",
+        "operationId": "list_documents_documents__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StatutDocument"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut du document (ex: en_attente, traité).",
+              "title": "Statut"
+            },
+            "description": "Filtre sur le statut du document (ex: en_attente, traité)."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_DocumentRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{id_document}": {
       "get": {
         "tags": [
@@ -2807,6 +2902,58 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{id_document}/fichier": {
+      "get": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Get Document File",
+        "description": "Renvoie le fichier original d'un document (PDF ou image), en streaming,\naprès vérification qu'il appartient bien à l'entreprise active\n(isolation des données : même 404 indistinct que la route de suivi).\n\nLe chemin est reconstruit depuis le nom stocké en base (jamais depuis\nune entrée client) et doit rester sous le répertoire d'upload : un\nenregistrement corrompu ne permet pas de lire ailleurs sur le disque.",
+        "operationId": "get_document_file_documents__id_document__fichier_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_document",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Document"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -5440,6 +5587,37 @@
           "limit"
         ],
         "title": "Page[ClientRead]"
+      },
+      "Page_DocumentRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[DocumentRead]"
       },
       "Page_FactureListItem_": {
         "properties": {

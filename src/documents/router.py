@@ -1,3 +1,4 @@
+import mimetypes
 import shutil
 import uuid
 from pathlib import Path
@@ -9,17 +10,21 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     Security,
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
+from sqlalchemy.orm import selectinload
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.config import settings
 from src.core.database import get_session
+from src.core.pagination import Page, PaginationParams, paginate
 from src.documents.exceptions import DocumentIntrouvableError
 from src.documents.models import (
     Document,
@@ -114,6 +119,42 @@ async def upload_document(
     }
 
 
+@router.get("/", response_model=Page[DocumentRead])
+async def list_documents(
+    session: session_dep,
+    id_entreprise: entreprise_id_dep,
+    pagination: Annotated[PaginationParams, Depends()],
+    statut: Annotated[
+        StatutDocument | None,
+        Query(description="Filtre sur le statut du document (ex: en_attente, traité)."),
+    ] = None,
+) -> Any:
+    """
+    Liste les documents uploadés de l'entreprise active, avec filtre par
+    statut et pagination — les plus récents d'abord. Le filtre s'applique
+    toujours à l'intérieur du périmètre de l'entreprise (isolation tenant).
+
+    Chaque élément expose ``id_facture`` : l'id du brouillon généré par
+    l'OCR pour un document traité, null sinon (même sémantique que la
+    route de suivi).
+    """
+    # Eager load des extractions : id_facture se résout sans requête par ligne.
+    statement = (
+        select(Document)
+        .where(Document.id_entreprise == id_entreprise)
+        .options(selectinload(Document.extractions))  # type: ignore
+    )
+    if statut is not None:
+        statement = statement.where(Document.statut == statut)
+    statement = statement.order_by(
+        col(Document.date_chargement).desc(), col(Document.id).desc()
+    )
+
+    page = await paginate(session, statement, pagination)
+    page.items = [DocumentRead.from_document(document) for document in page.items]
+    return page
+
+
 @router.get("/{id_document}", response_model=DocumentRead)
 async def get_document(
     id_document: int,
@@ -164,6 +205,52 @@ async def get_document(
         "date_chargement": db_document.date_chargement,
         "id_facture": id_facture,
     }
+
+
+@router.get("/{id_document}/fichier", response_class=FileResponse)
+async def get_document_file(
+    id_document: int,
+    session: session_dep,
+    id_entreprise: entreprise_id_dep,
+) -> FileResponse:
+    """
+    Renvoie le fichier original d'un document (PDF ou image), en streaming,
+    après vérification qu'il appartient bien à l'entreprise active
+    (isolation des données : même 404 indistinct que la route de suivi).
+
+    Le chemin est reconstruit depuis le nom stocké en base (jamais depuis
+    une entrée client) et doit rester sous le répertoire d'upload : un
+    enregistrement corrompu ne permet pas de lire ailleurs sur le disque.
+    """
+    statement = select(Document).where(
+        Document.id == id_document, Document.id_entreprise == id_entreprise
+    )
+    result = await session.exec(statement)
+    db_document = result.first()
+
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document introuvable dans cet espace entreprise",
+        )
+
+    upload_dir = UPLOAD_DIR.resolve()
+    chemin_fichier = (upload_dir / db_document.nom_fichier).resolve()
+    if not chemin_fichier.is_relative_to(upload_dir) or not chemin_fichier.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Fichier introuvable sur le serveur",
+        )
+
+    media_type = (
+        mimetypes.guess_type(db_document.nom_fichier)[0] or "application/octet-stream"
+    )
+    return FileResponse(
+        path=chemin_fichier,
+        media_type=media_type,
+        filename=db_document.nom_original,
+        content_disposition_type="inline",
+    )
 
 
 @router.post("/webhook/ocr", status_code=status.HTTP_200_OK)
