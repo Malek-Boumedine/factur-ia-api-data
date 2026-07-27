@@ -2,6 +2,52 @@
 
 <!-- version list -->
 
+## v1.8.0 (2026-07-27)
+
+### Bug Fixes
+
+- **factures**: Corrige la suppression d'un brouillon bloquée par une contrainte de clé étrangère
+  ([`afb1700`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/afb17007c62b4a40a6ea96b29d4a36d969440052))
+
+- **factures**: Recopie les snapshots SIRET et client sur l'avoir généré
+  ([`bf6d793`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/bf6d7939cd530f92232d67886c12b08e807c696f))
+
+- **factures**: Transmet les SIRET extraits jusqu'au brouillon OCR
+  ([`2666d75`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/2666d75ed3424db3bc39f16f6197577ea9225839))
+
+### Features
+
+- **documents**: Déclenche l'extraction IA après l'upload d'un document
+  ([`b08990a`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/b08990a874290428ada63f0c03cd23dcca67e68b))
+
+- **documents**: Route de suivi de l'état d'un document
+  ([`f1eef4a`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/f1eef4a62b33cda7f6e33597ef266097a928d8c6))
+
+- **documents**: Réconcilie le SIRET émetteur à la création du brouillon OCR
+  ([`11264a9`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/11264a99d6431bcc67dd31176239a4b0ba7c25ea))
+
+- **entreprises**: Route de lecture de l'entreprise active
+  ([`c3ee756`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/c3ee7567b332e32820670b4b4e5df07ad868d158))
+
+- **factures**: Numérotation distincte des avoirs (série AV-)
+  ([`72f8480`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/72f84803ef7d2ed0c9cd7083fa4363d1f8a12ec2))
+
+- **factures**: Route de détail d'une facture avec ses lignes
+  ([`79143f7`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/79143f79c1be70d81f6e2f73ab949aa526d98edf))
+
+- **factures**: Route de liste avec recherche, filtres et pagination
+  ([`306a716`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/306a7165ba196b1bd98d701a8e2985923894c46c))
+
+- **factures**: SIRET émetteur et destinataire éditables sur un brouillon
+  ([`cbdfc29`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/cbdfc298d109623b15537bcf0e3cbf63dc9ea1fb))
+
+- **factures**: Suppression d'un brouillon de facture
+  ([`af51ec6`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/af51ec6b49d02a45acf06e32a6a55ad103dd91bd))
+
+- **factures**: Édition d'un brouillon et contrôle de complétude à la validation
+  ([`d8d8595`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/d8d8595032df4bc722b11a34b55c8d1b149f395e))
+
+
 ## v1.7.0 (2026-07-03)
 
 ### Features
