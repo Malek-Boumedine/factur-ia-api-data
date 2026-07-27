@@ -2914,6 +2914,56 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Delete Document Endpoint",
+        "description": "Supprime un document uploadé, ses extractions OCR et son fichier physique.\n\nRefusé (409) si une facture — brouillon ou validée — référence le\ndocument : le brouillon doit être supprimé d'abord ; une facture validée,\nimmuable, impose de conserver le document (trace pour l'audit comptable).\n\nLe fichier physique n'est supprimé qu'après le commit réussi : une\ntransaction échouée ne laisse jamais un enregistrement sans fichier.\nUn fichier déjà absent du disque n'empêche pas la suppression (204).",
+        "operationId": "delete_document_endpoint_documents__id_document__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_document",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Document"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/documents/{id_document}/fichier": {

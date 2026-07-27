@@ -7,7 +7,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.core.database import async_session_maker
-from src.documents.exceptions import DocumentIntrouvableError
+from src.documents.exceptions import DocumentIntrouvableError, DocumentLieAFactureError
 from src.documents.models import (
     Document,
     ExtractionOcr,
@@ -17,7 +17,7 @@ from src.documents.models import (
 from src.documents.schemas import OcrWebhookPayload
 from src.entreprises.models import Entreprise
 from src.factures.exceptions import FacturationError
-from src.factures.models import TauxTva
+from src.factures.models import Facture, TauxTva
 from src.factures.schemas import FactureCreate, FactureLigneCreate
 from src.factures.service import create_facture_brouillon
 from src.integrations.ia_api.client import trigger_extraction
@@ -48,6 +48,59 @@ async def dispatch_extraction(id_document: int, file_path: Path) -> None:
         document.statut = StatutDocument.EN_COURS if accepted else StatutDocument.ERREUR
         session.add(document)
         await session.commit()
+
+
+async def delete_document(
+    session: AsyncSession,
+    id_document: int,
+    id_entreprise: int,
+) -> str:
+    """
+    Supprime un document uploadé et ses extractions OCR (isolation tenant).
+
+    Refusé si une facture — brouillon ou validée — référence le document :
+    la facture doit être supprimée d'abord (jamais possible pour une facture
+    validée, immuable : le document reste alors conservé comme trace
+    documentaire pour l'audit comptable). Le contrôle porte sur la FK directe
+    ``facture.id_document``, qui couvre aussi les avoirs (ils héritent de
+    l'``id_document`` de leur facture d'origine).
+
+    Les extractions sont supprimées avant le document puis poussées en base
+    (flush) : la FK ``extraction_ocr.id_document``, non nullable, bloquerait
+    le DELETE sinon. Retourne le nom du fichier physique, à supprimer par
+    l'appelant seulement après le commit réussi.
+    """
+    statement = select(Document).where(
+        Document.id == id_document, Document.id_entreprise == id_entreprise
+    )
+    result = await session.exec(statement)
+    document = result.first()
+    if document is None:
+        raise DocumentIntrouvableError(
+            "Document introuvable dans cet espace entreprise"
+        )
+
+    result_facture = await session.exec(
+        select(Facture.id).where(col(Facture.id_document) == id_document).limit(1)
+    )
+    if result_facture.first() is not None:
+        raise DocumentLieAFactureError(
+            "Une facture est liée à ce document : supprimez d'abord la facture "
+            "avant de supprimer le document."
+        )
+
+    result_extractions = await session.exec(
+        select(ExtractionOcr).where(ExtractionOcr.id_document == id_document)
+    )
+    for extraction in result_extractions.all():
+        await session.delete(extraction)
+
+    await session.flush()
+
+    nom_fichier = document.nom_fichier
+    await session.delete(document)
+    await session.commit()
+    return nom_fichier
 
 
 async def _payload_vers_facture_create(

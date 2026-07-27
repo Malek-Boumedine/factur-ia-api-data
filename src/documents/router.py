@@ -17,6 +17,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
+from loguru import logger
 from sqlalchemy.orm import selectinload
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -25,7 +26,7 @@ from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.config import settings
 from src.core.database import get_session
 from src.core.pagination import Page, PaginationParams, paginate
-from src.documents.exceptions import DocumentIntrouvableError
+from src.documents.exceptions import DocumentIntrouvableError, DocumentLieAFactureError
 from src.documents.models import (
     Document,
     ExtractionOcr,
@@ -33,7 +34,11 @@ from src.documents.models import (
     StatutExtraction,
 )
 from src.documents.schemas import DocumentRead, OcrWebhookPayload
-from src.documents.service import dispatch_extraction, traiter_callback_ocr
+from src.documents.service import (
+    delete_document,
+    dispatch_extraction,
+    traiter_callback_ocr,
+)
 from src.utilisateurs.models import Utilisateur
 
 API_KEY_HEADER = APIKeyHeader(name="X-OCR-Secret-Token", auto_error=True)
@@ -251,6 +256,49 @@ async def get_document_file(
         filename=db_document.nom_original,
         content_disposition_type="inline",
     )
+
+
+@router.delete("/{id_document}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document_endpoint(
+    id_document: int,
+    session: session_dep,
+    id_entreprise: entreprise_id_dep,
+) -> None:
+    """
+    Supprime un document uploadé, ses extractions OCR et son fichier physique.
+
+    Refusé (409) si une facture — brouillon ou validée — référence le
+    document : le brouillon doit être supprimé d'abord ; une facture validée,
+    immuable, impose de conserver le document (trace pour l'audit comptable).
+
+    Le fichier physique n'est supprimé qu'après le commit réussi : une
+    transaction échouée ne laisse jamais un enregistrement sans fichier.
+    Un fichier déjà absent du disque n'empêche pas la suppression (204).
+    """
+    try:
+        nom_fichier = await delete_document(
+            session=session,
+            id_document=id_document,
+            id_entreprise=id_entreprise,
+        )
+    except DocumentIntrouvableError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except DocumentLieAFactureError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+    # Même garde anti-traversal que la route fichier : un nom corrompu en
+    # base ne doit pas permettre de supprimer un fichier hors du répertoire.
+    upload_dir = UPLOAD_DIR.resolve()
+    chemin_fichier = (upload_dir / nom_fichier).resolve()
+    if chemin_fichier.is_relative_to(upload_dir):
+        try:
+            chemin_fichier.unlink(missing_ok=True)
+        except OSError:
+            logger.warning(
+                "Fichier {} du document {} non supprimé du disque",
+                nom_fichier,
+                id_document,
+            )
 
 
 @router.post("/webhook/ocr", status_code=status.HTTP_200_OK)
