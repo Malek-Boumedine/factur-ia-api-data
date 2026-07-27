@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.documents.schemas import ExtractionOcrRead
 from src.factures.models import Facture, TypeFacture
 
 
@@ -227,3 +228,11 @@ class FactureReadWithLignes(FactureRead):
     """
 
     lignes: list[FactureLigneRead] = Field(default_factory=list)
+
+    extraction: ExtractionOcrRead | None = Field(
+        default=None,
+        description="Métadonnées de l'extraction OCR à l'origine de la facture "
+        "(score global, type de document détecté, scores par champ). Null si la "
+        "facture n'est pas issue d'un OCR ; résolu uniquement sur la route de "
+        "détail (null sur les réponses de création/modification).",
+    )

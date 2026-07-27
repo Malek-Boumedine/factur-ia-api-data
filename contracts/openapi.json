@@ -2412,7 +2412,7 @@
           "Gestion des Factures"
         ],
         "summary": "Get Facture",
-        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture.",
+        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture. Si la facture est issue\nd'un OCR, `extraction` expose les métadonnées d'analyse (score global,\ntype de document détecté, scores par champ) depuis l'extraction liée la\nplus récente ; null sinon.",
         "operationId": "get_facture_factures__facture_id__get",
         "security": [
           {
@@ -4433,6 +4433,51 @@
         "title": "EntrepriseRead",
         "description": "Schéma de sortie d'une entreprise."
       },
+      "ExtractionOcrRead": {
+        "properties": {
+          "score_confiance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Confiance"
+          },
+          "type_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Document"
+          },
+          "par_champ": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string",
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Par Champ"
+          }
+        },
+        "type": "object",
+        "title": "ExtractionOcrRead",
+        "description": "Métadonnées OCR exposées au front sur le détail d'une facture.\n\nRegroupe ce qui vient de l'analyse IA pour le récapitulatif du brouillon :\nscore global, type de document détecté et scores par champ (reparsés en\nDecimal depuis les chaînes stockées). Null champ par champ si non calculé."
+      },
       "FactureCreate": {
         "properties": {
           "id_client": {
@@ -5184,6 +5229,17 @@
             },
             "type": "array",
             "title": "Lignes"
+          },
+          "extraction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractionOcrRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Métadonnées de l'extraction OCR à l'origine de la facture (score global, type de document détecté, scores par champ). Null si la facture n'est pas issue d'un OCR ; résolu uniquement sur la route de détail (null sur les réponses de création/modification)."
           }
         },
         "type": "object",
@@ -5564,6 +5620,45 @@
             "type": "array",
             "title": "Lignes",
             "default": []
+          },
+          "type_document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "devis",
+                  "facture",
+                  "avoir",
+                  "inconnu"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Document"
+          },
+          "par_champ": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Par Champ"
           }
         },
         "type": "object",

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from loguru import logger
@@ -150,10 +151,22 @@ async def _payload_vers_facture_create(
     )
 
 
+def _par_champ_as_json(par_champ: dict[str, Decimal] | None) -> dict[str, str] | None:
+    """Scores par champ sérialisés en chaînes (précision Decimal préservée)."""
+    if par_champ is None:
+        return None
+    return {champ: str(score) for champ, score in par_champ.items()}
+
+
 async def _enregistrer_echec(
     session: AsyncSession, payload: OcrWebhookPayload
 ) -> ExtractionOcr:
-    """Trace un échec de traitement : document en erreur, extraction en échec."""
+    """Trace un échec de traitement : document en erreur, extraction en échec.
+
+    Les métadonnées d'analyse (type de document, scores par champ) sont
+    conservées même en échec : un devis refusé faute de lignes exploitables
+    porte quand même un type détecté, utile au diagnostic.
+    """
     document = await session.get(Document, payload.id_document)
     if document is not None:
         document.statut = StatutDocument.ERREUR
@@ -164,6 +177,8 @@ async def _enregistrer_echec(
         contenu_brut=payload.model_dump(mode="json"),
         score_confiance=payload.score_confiance,
         statut=StatutExtraction.ECHEC,
+        type_document=payload.type_document,
+        par_champ=_par_champ_as_json(payload.par_champ),
     )
     session.add(extraction)
     await session.commit()
@@ -216,6 +231,8 @@ async def traiter_callback_ocr(
         score_confiance=payload.score_confiance,
         statut=StatutExtraction.SUCCES,
         id_facture=facture.id,
+        type_document=payload.type_document,
+        par_champ=_par_champ_as_json(payload.par_champ),
     )
     session.add(extraction)
     await session.commit()

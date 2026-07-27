@@ -10,6 +10,8 @@ from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.clients.models import Client
 from src.core.database import get_session
 from src.core.pagination import Page, PaginationParams, apply_search, paginate
+from src.documents.models import ExtractionOcr
+from src.documents.schemas import ExtractionOcrRead
 from src.factures.exceptions import (
     FacturationError,
     FactureIncompleteError,
@@ -173,7 +175,10 @@ async def get_facture(
     appartient bien à l'entreprise active (isolation des données).
 
     Pensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)
-    avant validation, mais valable pour toute facture.
+    avant validation, mais valable pour toute facture. Si la facture est issue
+    d'un OCR, `extraction` expose les métadonnées d'analyse (score global,
+    type de document détecté, scores par champ) depuis l'extraction liée la
+    plus récente ; null sinon.
     """
     statement = (
         select(Facture)
@@ -189,7 +194,21 @@ async def get_facture(
             detail="Facture introuvable dans cet espace entreprise",
         )
 
-    return db_facture
+    facture_read = FactureReadWithLignes.model_validate(db_facture)
+
+    result_extraction = await session.exec(
+        select(ExtractionOcr)
+        .where(col(ExtractionOcr.id_facture) == facture_id)
+        .order_by(
+            col(ExtractionOcr.date_extraction).desc(), col(ExtractionOcr.id).desc()
+        )
+        .limit(1)
+    )
+    extraction = result_extraction.first()
+    if extraction is not None:
+        facture_read.extraction = ExtractionOcrRead.model_validate(extraction)
+
+    return facture_read
 
 
 @router.patch("/{facture_id}", response_model=FactureReadWithLignes)

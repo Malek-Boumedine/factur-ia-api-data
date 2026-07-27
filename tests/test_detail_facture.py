@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.database import get_session
+from src.documents.models import ExtractionOcr
 from src.factures.models import Facture, FactureLigne
 from src.factures.router import router as factures_router
 from src.utilisateurs.models import Utilisateur
@@ -103,8 +104,9 @@ async def _get(app: FastAPI, facture_id: int = 42) -> Any:
 
 
 async def test_facture_avec_lignes() -> None:
-    """Facture trouvée : détail complet avec ses lignes et leurs montants."""
-    session = _FakeSession([_facture_avec_lignes()])
+    """Facture trouvée : détail complet avec ses lignes et leurs montants.
+    Sans extraction OCR liée, `extraction` est null."""
+    session = _FakeSession([_facture_avec_lignes(), None])
     response = await _get(_app(session))
 
     assert response.status_code == 200
@@ -112,6 +114,7 @@ async def test_facture_avec_lignes() -> None:
     assert body["id"] == 42
     assert body["numero_facture"] == "BROUILLON-42"
     assert body["total_ttc"] == "120.00"
+    assert body["extraction"] is None
 
     assert len(body["lignes"]) == 2
     ligne_1, ligne_2 = body["lignes"]
@@ -126,6 +129,35 @@ async def test_facture_avec_lignes() -> None:
     statement = session.statements[0]
     assert "id_entreprise" in str(statement)
     assert statement._with_options
+
+
+async def test_facture_ocr_expose_extraction() -> None:
+    """Facture issue d'un OCR : `extraction` expose le score global, le type
+    de document détecté et les scores par champ, reparsés en Decimal depuis
+    les chaînes stockées (sérialisés en chaînes dans le JSON de réponse)."""
+    extraction = ExtractionOcr(
+        id=9,
+        id_document=3,
+        id_facture=42,
+        score_confiance=Decimal("0.95"),
+        type_document="facture",
+        par_champ={"total_ht": "0.9876", "iban": "0.5000"},
+    )
+    session = _FakeSession([_facture_avec_lignes(), extraction])
+    response = await _get(_app(session))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["extraction"] == {
+        "score_confiance": "0.95",
+        "type_document": "facture",
+        "par_champ": {"total_ht": "0.9876", "iban": "0.5000"},
+    }
+
+    # La résolution vise bien l'extraction liée à la facture
+    statement_extraction = session.statements[1]
+    assert "extraction_ocr" in str(statement_extraction)
+    assert "id_facture" in str(statement_extraction)
 
 
 async def test_facture_hors_perimetre_ou_inexistante_404() -> None:

@@ -1,9 +1,15 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.documents.models import Document, StatutDocument, StatutExtraction
+
+# Miroir strict du contrat de l'API IA : une valeur hors liste est un signal
+# de désynchronisation des contrats (422 souhaité), "inconnu" étant déjà la
+# valeur d'échappement côté IA.
+TypeDocumentOcr = Literal["devis", "facture", "avoir", "inconnu"]
 
 
 class DocumentRead(BaseModel):
@@ -68,3 +74,25 @@ class OcrWebhookPayload(BaseModel):
     total_ttc: Decimal
     iban: str | None = None
     lignes: list[LigneOcr] = []
+
+    # Champs additifs du contrat API IA : optionnels (rétrocompatibilité avec
+    # une API IA antérieure), null = non calculé. Les clés de `par_champ` ne
+    # sont volontairement pas contraintes (robuste si l'IA score un champ de
+    # plus) ; les scores en chaînes du contrat sont reparsés en Decimal.
+    type_document: TypeDocumentOcr | None = None
+    par_champ: dict[str, Decimal] | None = None
+
+
+class ExtractionOcrRead(BaseModel):
+    """Métadonnées OCR exposées au front sur le détail d'une facture.
+
+    Regroupe ce qui vient de l'analyse IA pour le récapitulatif du brouillon :
+    score global, type de document détecté et scores par champ (reparsés en
+    Decimal depuis les chaînes stockées). Null champ par champ si non calculé.
+    """
+
+    score_confiance: Decimal | None = None
+    type_document: str | None = None
+    par_champ: dict[str, Decimal] | None = None
+
+    model_config = ConfigDict(from_attributes=True)
