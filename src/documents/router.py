@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -13,15 +14,21 @@ from fastapi import (
     status,
 )
 from fastapi.security import APIKeyHeader
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.config import settings
 from src.core.database import get_session
 from src.documents.exceptions import DocumentIntrouvableError
-from src.documents.models import Document, StatutDocument
-from src.documents.schemas import OcrWebhookPayload
-from src.documents.service import traiter_callback_ocr
+from src.documents.models import (
+    Document,
+    ExtractionOcr,
+    StatutDocument,
+    StatutExtraction,
+)
+from src.documents.schemas import DocumentRead, OcrWebhookPayload
+from src.documents.service import dispatch_extraction, traiter_callback_ocr
 from src.utilisateurs.models import Utilisateur
 
 API_KEY_HEADER = APIKeyHeader(name="X-OCR-Secret-Token", auto_error=True)
@@ -42,9 +49,13 @@ async def upload_document(
     current_user: current_user_dep,
     id_entreprise: entreprise_id_dep,
     file: Annotated[UploadFile, File(...)],
+    background_tasks: BackgroundTasks,
 ) -> dict[str, Any]:
     """
     Reçoit un fichier (PDF ou Image), le valide, le stocke et crée une entrée en base.
+
+    Déclenche ensuite l'extraction OCR en tâche de fond : la réponse est
+    renvoyée sans attendre l'API IA, qui rappellera le webhook OCR.
     """
     if current_user.id is None:
         raise HTTPException(
@@ -90,12 +101,68 @@ async def upload_document(
     await session.commit()
     await session.refresh(db_document)
 
+    # 5. Déclenchement de l'extraction OCR après l'envoi de la réponse
+    if db_document.id is not None:
+        background_tasks.add_task(dispatch_extraction, db_document.id, chemin_complet)
+
     return {
         "message": "Fichier uploadé avec succès",
         "id_document": db_document.id,
         "nom_fichier": db_document.nom_fichier,
         "nom_original": db_document.nom_original,
         "statut": db_document.statut,
+    }
+
+
+@router.get("/{id_document}", response_model=DocumentRead)
+async def get_document(
+    id_document: int,
+    session: session_dep,
+    id_entreprise: entreprise_id_dep,
+) -> Any:
+    """
+    Récupère l'état d'un document en s'assurant qu'il appartient bien à
+    l'entreprise active (isolation des données).
+
+    Pensée pour le polling du front pendant l'extraction : le statut évolue
+    de `en_attente` à `en_cours` puis `traité` ou `erreur`. Quand le document
+    est traité, `id_facture` pointe vers le brouillon généré par l'OCR.
+    """
+    statement = select(Document).where(
+        Document.id == id_document, Document.id_entreprise == id_entreprise
+    )
+    result = await session.exec(statement)
+    db_document = result.first()
+
+    if not db_document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document introuvable dans cet espace entreprise",
+        )
+
+    # L'id de facture vit sur l'extraction réussie la plus récente : une
+    # extraction en échec ne porte jamais d'id_facture et est exclue du filtre.
+    id_facture: int | None = None
+    if db_document.statut == StatutDocument.TRAITE:
+        result_extraction = await session.exec(
+            select(ExtractionOcr.id_facture)
+            .where(
+                ExtractionOcr.id_document == id_document,
+                ExtractionOcr.statut == StatutExtraction.SUCCES,
+            )
+            .order_by(
+                col(ExtractionOcr.date_extraction).desc(),
+                col(ExtractionOcr.id).desc(),
+            )
+        )
+        id_facture = result_extraction.first()
+
+    return {
+        "id": db_document.id,
+        "nom_original": db_document.nom_original,
+        "statut": db_document.statut,
+        "date_chargement": db_document.date_chargement,
+        "id_facture": id_facture,
     }
 
 

@@ -30,6 +30,9 @@ class Settings(BaseSettings):
 
     SECRET_OCR_TOKEN: str
 
+    # API IA D'EXTRACTION (OCR)
+    IA_API_BASE_URL: str
+
     # RÉINITIALISATION DE MOT DE PASSE
     # Valeurs par défaut fournies pour ne pas bloquer le démarrage ;
     # à surcharger via l'environnement en production.

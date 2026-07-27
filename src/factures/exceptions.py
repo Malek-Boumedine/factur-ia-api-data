@@ -23,6 +23,20 @@ class FactureNotFoundError(FacturationError):
 
 
 class TransitionStatutInvalideError(FacturationError):
-    """Levée quand on tente de valider une facture qui n'est pas un brouillon."""
+    """Levée quand on tente de valider ou modifier une facture \
+        qui n'est pas un brouillon."""
+
+    pass
+
+
+class FactureIncompleteError(FacturationError):
+    """Levée quand on tente de valider un brouillon incomplet (ex: sans client)."""
+
+    pass
+
+
+class TypeFactureNonModifiableError(FacturationError):
+    """Levée quand on tente de changer le type d'un avoir \
+        lié à une facture d'origine."""
 
     pass

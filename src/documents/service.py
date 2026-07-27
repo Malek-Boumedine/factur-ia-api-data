@@ -1,9 +1,12 @@
 from datetime import date
+from pathlib import Path
 
+from loguru import logger
 from pydantic import ValidationError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.core.database import async_session_maker
 from src.documents.exceptions import DocumentIntrouvableError
 from src.documents.models import (
     Document,
@@ -12,10 +15,39 @@ from src.documents.models import (
     StatutExtraction,
 )
 from src.documents.schemas import OcrWebhookPayload
+from src.entreprises.models import Entreprise
 from src.factures.exceptions import FacturationError
 from src.factures.models import TauxTva
 from src.factures.schemas import FactureCreate, FactureLigneCreate
 from src.factures.service import create_facture_brouillon
+from src.integrations.ia_api.client import trigger_extraction
+
+
+async def dispatch_extraction(id_document: int, file_path: Path) -> None:
+    """
+    Tâche de fond post-upload : envoie le document à l'API IA pour extraction.
+
+    Exécutée après l'envoi de la réponse HTTP (la session de la requête est
+    déjà fermée), elle ouvre sa propre session pour mettre à jour le statut :
+    EN_COURS si l'API IA a accepté la demande, ERREUR sinon. Si le webhook OCR
+    a déjà posé un statut final entre-temps, on ne l'écrase pas.
+    """
+    accepted = await trigger_extraction(file_path, id_document)
+
+    async with async_session_maker() as session:
+        document = await session.get(Document, id_document)
+        if document is None:
+            logger.warning(
+                "Document {} introuvable après déclenchement OCR", id_document
+            )
+            return
+
+        if accepted and document.statut != StatutDocument.EN_ATTENTE:
+            return
+
+        document.statut = StatutDocument.EN_COURS if accepted else StatutDocument.ERREUR
+        session.add(document)
+        await session.commit()
 
 
 async def _payload_vers_facture_create(
@@ -56,6 +88,8 @@ async def _payload_vers_facture_create(
     return FactureCreate(
         id_document=document.id,
         date_emission=payload.date_emission or date.today(),
+        siret_emetteur=payload.siret_emetteur,
+        siret_destinataire=payload.siret_destinataire,
         iban=payload.iban,
         reference_commande=payload.numero_facture,
         notes="Brouillon généré automatiquement depuis l'analyse OCR.",
@@ -109,6 +143,15 @@ async def traiter_callback_ocr(
     except (FacturationError, ValidationError):
         await session.rollback()
         return await _enregistrer_echec(session, payload)
+
+    # Réconciliation du SIRET émetteur : l'émetteur est toujours l'entreprise
+    # détentrice de l'abonnement. Le brouillon garde la valeur lue par l'OCR
+    # (le front la compare au SIRET de l'entreprise et signale toute
+    # divergence) ; à défaut, il propose le SIRET de l'entreprise. Dans tous
+    # les cas, la validation écrasera depuis l'entreprise (elle fait autorité).
+    entreprise = await session.get(Entreprise, document.id_entreprise)
+    siret_entreprise = entreprise.siret if entreprise else None
+    facture.siret_emetteur = payload.siret_emetteur or siret_entreprise
 
     # Succès : on fige le statut et on lie l'extraction au brouillon créé
     document.statut = StatutDocument.TRAITE

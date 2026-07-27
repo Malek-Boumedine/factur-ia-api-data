@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.6.0"
+    "version": "1.7.0"
   },
   "paths": {
     "/auth/token": {
@@ -2219,6 +2219,367 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "List Factures",
+        "description": "Récupère les factures de l'entreprise active, avec recherche, filtres et\npagination — les plus récentes d'abord. La recherche et les filtres\ns'appliquent toujours à l'intérieur du périmètre de l'entreprise\n(isolation tenant).\n\nChaque élément expose ``nom_destinataire`` : snapshot figé pour une\nfacture validée, raison sociale du client lié pour un brouillon.",
+        "operationId": "list_factures_factures__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur numéro de facture, référence de commande ou raison sociale du client.",
+              "title": "Search"
+            },
+            "description": "Recherche sur numéro de facture, référence de commande ou raison sociale du client."
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée).",
+              "title": "Statut"
+            },
+            "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée)."
+          },
+          {
+            "name": "type_facture",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TypeFacture"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le type de document (facture ou avoir).",
+              "title": "Type Facture"
+            },
+            "description": "Filtre sur le type de document (facture ou avoir)."
+          },
+          {
+            "name": "id_client",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le client destinataire.",
+              "title": "Id Client"
+            },
+            "description": "Filtre sur le client destinataire."
+          },
+          {
+            "name": "date_emission_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne basse (incluse) sur la date d'émission.",
+              "title": "Date Emission Min"
+            },
+            "description": "Borne basse (incluse) sur la date d'émission."
+          },
+          {
+            "name": "date_emission_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne haute (incluse) sur la date d'émission.",
+              "title": "Date Emission Max"
+            },
+            "description": "Borne haute (incluse) sur la date d'émission."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_FactureListItem_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/factures/{facture_id}": {
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Get Facture",
+        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture.",
+        "operationId": "get_facture_factures__facture_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactureReadWithLignes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Update Brouillon Endpoint",
+        "description": "Modifie un brouillon de facture : champs d'en-tête et, si fournies,\nremplacement complet des lignes (totaux recalculés).\n\nSeuls les brouillons sont modifiables : toute tentative sur une facture\nvalidée est refusée (409, inaltérabilité légale).",
+        "operationId": "update_brouillon_endpoint_factures__facture_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactureUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactureReadWithLignes"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Delete Brouillon Endpoint",
+        "description": "Supprime un brouillon de facture et ses lignes.\n\nRefusé (409) si la facture n'est pas un brouillon : une facture validée\nest immuable et ne peut jamais être supprimée (inaltérabilité légale).\nLe document source et son extraction OCR sont conservés (trace).",
+        "operationId": "delete_brouillon_endpoint_factures__facture_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/factures/{facture_id}/valider": {
@@ -2227,7 +2588,7 @@
           "Gestion des Factures"
         ],
         "summary": "Valider Brouillon Endpoint",
-        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).",
+        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).\n\nRefusé (409) si la facture n'est pas un brouillon ou si le brouillon\nest incomplet (aucun client associé).",
         "operationId": "valider_brouillon_endpoint_factures__facture_id__valider_post",
         "security": [
           {
@@ -2286,7 +2647,7 @@
           "Gestion des Factures"
         ],
         "summary": "Generer Avoir Endpoint",
-        "description": "Génère un avoir (en brouillon) à partir d'une facture validée.",
+        "description": "Génère un avoir (en brouillon) à partir d'une facture validée.\n\nRefusé (409) si la facture source n'est pas au statut 'Validée'.",
         "operationId": "generer_avoir_endpoint_factures__facture_id__avoir_post",
         "security": [
           {
@@ -2345,7 +2706,7 @@
           "Documents & OCR"
         ],
         "summary": "Upload Document",
-        "description": "Reçoit un fichier (PDF ou Image), le valide, le stocke et crée une entrée en base.",
+        "description": "Reçoit un fichier (PDF ou Image), le valide, le stocke et crée une entrée en base.\n\nDéclenche ensuite l'extraction OCR en tâche de fond : la réponse est\nrenvoyée sans attendre l'API IA, qui rappellera le webhook OCR.",
         "operationId": "upload_document_documents_upload_post",
         "security": [
           {
@@ -2384,6 +2745,65 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Upload Document Documents Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{id_document}": {
+      "get": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Get Document",
+        "description": "Récupère l'état d'un document en s'assurant qu'il appartient bien à\nl'entreprise active (isolation des données).\n\nPensée pour le polling du front pendant l'extraction : le statut évolue\nde `en_attente` à `en_cours` puis `traité` ou `erreur`. Quand le document\nest traité, `id_facture` pointe vers le brouillon généré par l'OCR.",
+        "operationId": "get_document_documents__id_document__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_document",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Document"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRead"
                 }
               }
             }
@@ -2448,6 +2868,56 @@
             "APIKeyHeader": []
           }
         ]
+      }
+    },
+    "/entreprises/me": {
+      "get": {
+        "tags": [
+          "Entreprises"
+        ],
+        "summary": "Get Entreprise Active Endpoint",
+        "description": "Renvoie l'entreprise active (espace de travail courant), résolue via le\nheader `x-entreprise-id` après contrôle d'appartenance. Donne au client\nweb accès aux informations légales de l'émetteur (SIRET notamment).",
+        "operationId": "get_entreprise_active",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/entreprises/": {
@@ -3578,6 +4048,46 @@
         "title": "ClientUpdate",
         "description": "Schéma pour la mise à jour partielle d'un client (PATCH)."
       },
+      "DocumentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_original": {
+            "type": "string",
+            "title": "Nom Original"
+          },
+          "statut": {
+            "$ref": "#/components/schemas/StatutDocument"
+          },
+          "date_chargement": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Chargement"
+          },
+          "id_facture": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Facture"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_original",
+          "statut",
+          "date_chargement"
+        ],
+        "title": "DocumentRead",
+        "description": "État d'un document uploadé, pour le suivi du traitement par le front.\n\n`id_facture` pointe vers le brouillon de facture généré par l'OCR :\nrenseigné uniquement quand le document est traité, null sinon."
+      },
       "EntrepriseAbonnementRead": {
         "properties": {
           "id": {
@@ -3835,6 +4345,30 @@
             "title": "Notes",
             "description": "Notes internes ou mentions spécifiques"
           },
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
           "lignes": {
             "items": {
               "$ref": "#/components/schemas/FactureLigneCreate"
@@ -4004,6 +4538,241 @@
         ],
         "title": "FactureLigneRead",
         "description": "Schéma pour la lecture d'une ligne\nde facture avec ses montants calculés."
+      },
+      "FactureListItem": {
+        "properties": {
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client",
+            "description": "Client destinataire de la facture"
+          },
+          "id_document": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Document",
+            "description": "Document source si issue d'une extraction OCR"
+          },
+          "date_emission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance",
+            "description": "Date limite de paiement"
+          },
+          "devise": {
+            "type": "string",
+            "maxLength": 3,
+            "title": "Devise",
+            "default": "EUR"
+          },
+          "type_facture": {
+            "$ref": "#/components/schemas/TypeFacture",
+            "default": "facture"
+          },
+          "mode_paiement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Paiement"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 34
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "reference_commande": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Commande"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes",
+            "description": "Notes internes ou mentions spécifiques"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_entreprise": {
+            "type": "integer",
+            "title": "Id Entreprise"
+          },
+          "id_createur": {
+            "type": "integer",
+            "title": "Id Createur"
+          },
+          "numero_facture": {
+            "type": "string",
+            "title": "Numero Facture"
+          },
+          "id_statut": {
+            "type": "integer",
+            "title": "Id Statut"
+          },
+          "id_facture_origine": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Facture Origine",
+            "description": "Facture d'origine si ce document est un avoir"
+          },
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
+          "snapshot_client": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Client"
+          },
+          "total_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ht"
+          },
+          "total_tva": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Tva"
+          },
+          "total_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Ttc"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Modification"
+          },
+          "nom_destinataire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom Destinataire",
+            "description": "Raison sociale du destinataire : snapshot figé pour une facture validée, sinon client lié (brouillon)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "id_entreprise",
+          "id_createur",
+          "numero_facture",
+          "id_statut",
+          "total_ht",
+          "total_tva",
+          "total_ttc",
+          "date_creation"
+        ],
+        "title": "FactureListItem",
+        "description": "Élément de la liste des factures : ``FactureRead`` enrichi du nom du\ndestinataire résolu, pour que le front affiche un nom sur chaque ligne\nsans requête supplémentaire."
       },
       "FactureReadWithLignes": {
         "properties": {
@@ -4234,6 +5003,157 @@
         ],
         "title": "FactureReadWithLignes",
         "description": "Schéma détaillé d'une facture incluant toutes ses lignes.\nIdéal pour l'affichage de la page de détail d'une facture spécifique."
+      },
+      "FactureUpdate": {
+        "properties": {
+          "siret_emetteur": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Emetteur"
+          },
+          "siret_destinataire": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret Destinataire"
+          },
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client"
+          },
+          "date_emission": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance"
+          },
+          "devise": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 3
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Devise"
+          },
+          "type_facture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TypeFacture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode_paiement": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Paiement"
+          },
+          "iban": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 34
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iban"
+          },
+          "reference_commande": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Commande"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "lignes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FactureLigneCreate"
+                },
+                "type": "array",
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lignes",
+            "description": "Nouvelle liste de lignes remplaçant intégralement l'existante"
+          }
+        },
+        "type": "object",
+        "title": "FactureUpdate",
+        "description": "Schéma pour la mise à jour d'un brouillon de facture (sémantique PATCH).\nTous les champs sont optionnels : seuls les champs envoyés sont modifiés,\nun champ omis reste inchangé. Envoyer explicitement ``null`` efface un\nchamp nullable."
       },
       "HTTPValidationError": {
         "properties": {
@@ -4521,6 +5441,37 @@
         ],
         "title": "Page[ClientRead]"
       },
+      "Page_FactureListItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FactureListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[FactureListItem]"
+      },
       "ProfilUpdate": {
         "properties": {
           "nom": {
@@ -4802,6 +5753,17 @@
         "type": "object",
         "title": "SearchSireneSiretResponse",
         "description": "Schéma représentant les données renvoyées\npar l'API gouvernementale lors d'une recherche par SIRET.\nLes champs sont alignés avec ClientBase pour\nfaciliter le pré-remplissage côté front-end."
+      },
+      "StatutDocument": {
+        "type": "string",
+        "enum": [
+          "en_attente",
+          "en_cours",
+          "traité",
+          "erreur"
+        ],
+        "title": "StatutDocument",
+        "description": "Statuts possibles pour un document uploadé."
       },
       "StatutSouscription": {
         "type": "string",
