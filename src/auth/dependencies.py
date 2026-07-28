@@ -3,13 +3,13 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from sqlmodel import select
+from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.models import Permission, PermissionRole, Role, UtilisateurRole
 from src.core.config import settings
 from src.core.database import get_session
-from src.entreprises.models import UtilisateurEntreprise
+from src.entreprises.models import Entreprise, UtilisateurEntreprise
 from src.utilisateurs.models import Utilisateur
 
 # On définit l'URL de l'endpoint qui gérera le login
@@ -55,6 +55,59 @@ async def get_current_user(
     return user
 
 
+# Message renvoyé lorsque l'entreprise a été suspendue par la plateforme. Il est
+# volontairement explicite : le client web s'en sert pour afficher un écran
+# « compte suspendu » plutôt qu'une erreur d'accès générique.
+ENTREPRISE_SUSPENDUE_DETAIL = (
+    "Cette entreprise a été suspendue par l'administration de la plateforme. "
+    "Contactez le support."
+)
+
+
+async def _resolve_membership(
+    session: AsyncSession, utilisateur_id: int | None, entreprise_id: int
+) -> tuple[UtilisateurEntreprise, Entreprise]:
+    """
+    Résout l'appartenance d'un utilisateur à une entreprise et l'état de
+    celle-ci, en une seule requête (jointure pivot -> entreprise).
+
+    Socle commun de ``verify_tenant_access`` et ``require_entreprise_admin``,
+    pour que le contrôle de suspension s'applique identiquement aux deux : sans
+    cela, un administrateur d'entreprise pourrait continuer d'agir (changer de
+    plan, par exemple) sur une entreprise suspendue.
+
+    Renvoie 403 si l'utilisateur n'est pas membre, et 403 également si
+    l'entreprise est suspendue — deux messages distincts, aucun des deux ne
+    révélant d'information sur une entreprise dont l'utilisateur n'est pas
+    membre.
+    """
+    statement = (
+        select(UtilisateurEntreprise, Entreprise)
+        .join(Entreprise, col(Entreprise.id) == UtilisateurEntreprise.id_entreprise)
+        .where(UtilisateurEntreprise.id_utilisateur == utilisateur_id)
+        .where(UtilisateurEntreprise.id_entreprise == entreprise_id)
+    )
+
+    result = await session.exec(statement)
+    row = result.first()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Accès refusé. Vous n'appartenez pas à cette entreprise.",
+        )
+
+    lien_entreprise, entreprise = row
+
+    if not entreprise.est_actif:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ENTREPRISE_SUSPENDUE_DETAIL,
+        )
+
+    return lien_entreprise, entreprise
+
+
 # isolation de l'entreprise (tenant)
 async def verify_tenant_access(
     x_entreprise_id: Annotated[
@@ -74,22 +127,13 @@ async def verify_tenant_access(
     Intercepte le header HTTP `X-Entreprise-ID` envoyé par le client et vérifie
     en base de données si l'utilisateur authentifié est légitimement rattaché
     à cet espace de travail.
+
+    Refuse également l'accès (403) si l'entreprise a été suspendue par un
+    administrateur de plateforme : le blocage est total sur toutes les routes
+    tenant. Les routes hors tenant (`/utilisateurs/me`, `/abonnements/me`)
+    continuent de répondre, afin que le client puisse expliquer la situation.
     """
-    statement = (
-        select(UtilisateurEntreprise)
-        .where(UtilisateurEntreprise.id_utilisateur == current_user.id)
-        .where(UtilisateurEntreprise.id_entreprise == x_entreprise_id)
-    )
-
-    result = await session.exec(statement)
-    lien_entreprise = result.first()
-
-    if not lien_entreprise:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé. Vous n'appartenez pas à cette entreprise.",
-        )
-
+    await _resolve_membership(session, current_user.id, x_entreprise_id)
     return x_entreprise_id
 
 
@@ -108,26 +152,16 @@ async def require_entreprise_admin(
     """
     Garde-fou pour les actions sensibles au niveau d'une entreprise (tenant).
 
-    Reprend le contrôle d'appartenance de ``verify_tenant_access`` (même requête
-    sur ``UtilisateurEntreprise``) et exige en plus le flag ``est_admin`` : seul
-    un administrateur de l'entreprise active peut poursuivre. Renvoie 403 si
-    l'utilisateur n'appartient pas à l'entreprise, ou s'il en est un membre
-    non-admin. Réutilisable pour d'autres opérations d'administration métier.
+    Reprend le contrôle d'appartenance et de suspension de
+    ``verify_tenant_access`` et exige en plus le flag ``est_admin`` : seul un
+    administrateur de l'entreprise active peut poursuivre. Renvoie 403 si
+    l'utilisateur n'appartient pas à l'entreprise, si celle-ci est suspendue, ou
+    s'il en est un membre non-admin. Réutilisable pour d'autres opérations
+    d'administration métier.
     """
-    statement = (
-        select(UtilisateurEntreprise)
-        .where(UtilisateurEntreprise.id_utilisateur == current_user.id)
-        .where(UtilisateurEntreprise.id_entreprise == x_entreprise_id)
+    lien_entreprise, _ = await _resolve_membership(
+        session, current_user.id, x_entreprise_id
     )
-
-    result = await session.exec(statement)
-    lien_entreprise = result.first()
-
-    if not lien_entreprise:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé. Vous n'appartenez pas à cette entreprise.",
-        )
 
     if not lien_entreprise.est_admin:
         raise HTTPException(

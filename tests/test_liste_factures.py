@@ -16,7 +16,7 @@ from httpx import ASGITransport, AsyncClient
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.clients.models import Client
 from src.core.database import get_session
-from src.factures.models import Facture, TypeFacture
+from src.factures.models import Facture, StatutFacture, TypeFacture
 from src.factures.router import router as factures_router
 from src.utilisateurs.models import Utilisateur
 
@@ -60,6 +60,7 @@ def _brouillon() -> Facture:
         total_ttc=Decimal("120.00"),
     )
     facture.client = Client(id=7, raison_sociale="Client Courant SARL")
+    facture.statut_ref = StatutFacture(id=1, libelle="brouillon")
     return facture
 
 
@@ -81,6 +82,29 @@ def _validee() -> Facture:
         total_ttc=Decimal("600.00"),
     )
     facture.client = Client(id=8, raison_sociale="Nom Actuel Différent SA")
+    facture.statut_ref = StatutFacture(id=2, libelle="validée")
+    return facture
+
+
+def _payee() -> Facture:
+    """Facture validée ayant progressé (payée) : doit rester dans la famille
+    non-brouillon de l'onglet « Validées »."""
+    facture = Facture(
+        id=3,
+        id_entreprise=1,
+        id_createur=1,
+        id_client=8,
+        numero_facture="FAC-202607-0002",
+        date_emission=date(2026, 7, 15),
+        type_facture=TypeFacture.FACTURE,
+        id_statut=10,
+        snapshot_client={"raison_sociale": "Snapshot Historique SA"},
+        total_ht=Decimal("200.00"),
+        total_tva=Decimal("40.00"),
+        total_ttc=Decimal("240.00"),
+    )
+    facture.client = Client(id=8, raison_sociale="Nom Actuel Différent SA")
+    facture.statut_ref = StatutFacture(id=10, libelle="payee")
     return facture
 
 
@@ -130,6 +154,11 @@ async def test_liste_mixte_nom_destinataire_resolu() -> None:
     assert validee["numero_facture"] == "FAC-202607-0001"
     assert validee["nom_destinataire"] == "Snapshot Historique SA"
 
+    # Le libellé du statut est exposé tel que stocké dans le référentiel
+    # (clé que le front mappe vers son badge coloré)
+    assert brouillon["libelle_statut"] == "brouillon"
+    assert validee["libelle_statut"] == "validée"
+
     # Les lignes ne sont pas exposées dans le listing (schéma allégé)
     assert "lignes" not in brouillon
 
@@ -150,6 +179,18 @@ async def test_facture_sans_client_nom_destinataire_null() -> None:
     assert response.json()["items"][0]["nom_destinataire"] is None
 
 
+async def test_statut_orphelin_libelle_statut_null() -> None:
+    """Référentiel incohérent (statut non résolu) : libelle_statut est null,
+    la liste répond quand même (pas de 500)."""
+    facture = _brouillon()
+    facture.statut_ref = None
+    session = _FakeSession([1, [facture]])
+    response = await _get(_app(session))
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["libelle_statut"] is None
+
+
 async def test_filtre_statut_brouillon() -> None:
     """?statut=Brouillon : jointure sur le référentiel des statuts et filtre
     sur le libellé (onglet « Brouillons » du front)."""
@@ -165,16 +206,51 @@ async def test_filtre_statut_brouillon() -> None:
     assert "Brouillon" in _bound_params(session.statements[0])
 
 
-async def test_filtre_statut_validee() -> None:
-    """?statut=Validée : même mécanique pour l'onglet « Factures validées »."""
-    session = _FakeSession([1, [_validee()]])
+async def test_filtre_statut_validee_famille_non_brouillon() -> None:
+    """?statut=Validée : famille « non-brouillon » — exclusion du brouillon
+    plutôt qu'une égalité stricte, pour que les factures ayant progressé
+    (payée, en retard…) restent dans l'onglet « Validées »."""
+    session = _FakeSession([2, [_validee(), _payee()]])
     response = await _get(_app(session), {"statut": "Validée"})
 
     assert response.status_code == 200
     page_statement = session.statements[1]
     assert "JOIN statut_facture" in str(page_statement)
-    assert "Validée" in _bound_params(page_statement)
-    assert "Validée" in _bound_params(session.statements[0])
+    # Filtre d'exclusion du brouillon, pas d'égalité sur « Validée »
+    assert "NOT" in str(page_statement)
+    assert "brouillon" in _bound_params(page_statement)
+    assert "Validée" not in _bound_params(page_statement)
+    # Le comptage applique la même exclusion (total cohérent avec l'onglet)
+    assert "brouillon" in _bound_params(session.statements[0])
+
+    # Une facture payée traverse le filtre et expose son libellé
+    libelles = [item["libelle_statut"] for item in response.json()["items"]]
+    assert libelles == ["validée", "payee"]
+
+
+async def test_filtre_statut_alias_validees() -> None:
+    """?statut=validees (alias sans accent) : même famille non-brouillon."""
+    session = _FakeSession([1, [_validee()]])
+    response = await _get(_app(session), {"statut": "validees"})
+
+    assert response.status_code == 200
+    page_statement = session.statements[1]
+    assert "NOT" in str(page_statement)
+    assert "brouillon" in _bound_params(page_statement)
+
+
+async def test_filtre_statut_exact_autre_libelle() -> None:
+    """?statut=payee : tout autre libellé garde l'égalité stricte (sous-filtres
+    fins par statut préservés)."""
+    session = _FakeSession([1, [_payee()]])
+    response = await _get(_app(session), {"statut": "payee"})
+
+    assert response.status_code == 200
+    page_statement = session.statements[1]
+    assert "JOIN statut_facture" in str(page_statement)
+    assert "NOT" not in str(page_statement)
+    assert "payee" in _bound_params(page_statement)
+    assert "payee" in _bound_params(session.statements[0])
 
 
 async def test_pagination_dans_statut_filtre() -> None:
@@ -190,12 +266,13 @@ async def test_pagination_dans_statut_filtre() -> None:
     assert body["limit"] == 2
 
     # La tranche est bien découpée sur la requête filtrée par statut
+    # (famille non-brouillon : le paramètre lié est l'exclusion du brouillon)
     page_params = _bound_params(session.statements[1])
-    assert "Validée" in page_params
+    assert "brouillon" in page_params
     assert 10 in page_params
     assert 2 in page_params
     # Le comptage porte sur la même requête filtrée (pas de LIMIT dedans)
-    assert "Validée" in _bound_params(session.statements[0])
+    assert "brouillon" in _bound_params(session.statements[0])
 
 
 async def test_filtre_dates_inclusives() -> None:

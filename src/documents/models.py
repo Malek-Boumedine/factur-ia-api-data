@@ -72,6 +72,13 @@ class ExtractionOcr(SQLModel, table=True):
     date_extraction: datetime = Field(default_factory=lambda: datetime.now(UTC))
     statut: StatutExtraction = Field(default=StatutExtraction.ECHEC)
 
+    # Métadonnées d'analyse transmises par l'API IA (contrat additif) :
+    # type de document détecté et scores de confiance par champ extrait.
+    # Les scores sont stockés en chaînes telles que reçues (précision
+    # Decimal préservée) ; null = non calculé (échec ou ancienne API IA).
+    type_document: str | None = Field(default=None, max_length=20)
+    par_champ: dict[str, str] | None = Field(default=None, sa_column=Column(JSON))
+
     # Lien vers la facture finale générée (si succès)
     id_facture: int | None = Field(default=None, foreign_key="facture.id")
 

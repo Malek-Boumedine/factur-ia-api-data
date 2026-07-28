@@ -3,8 +3,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import JSON, TEXT, Column, DateTime, Numeric
-from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import JSON, TEXT, Column, DateTime, Index, Numeric
+from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 from src.documents.models import Document
 
@@ -53,6 +53,16 @@ class Facture(SQLModel, table=True):
     """
 
     __tablename__ = "facture"
+    __table_args__ = (
+        UniqueConstraint(
+            "id_entreprise", "numero_facture", name="unique_entreprise_numero_facture"
+        ),
+        # Toutes les agrégations de statistiques (et la liste filtrée par
+        # période) attaquent la table par entreprise puis par date d'émission :
+        # l'index composite évite de filtrer les dates ligne à ligne après
+        # l'index simple sur id_entreprise.
+        Index("ix_facture_entreprise_date_emission", "id_entreprise", "date_emission"),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
 
@@ -67,7 +77,7 @@ class Facture(SQLModel, table=True):
         default=None, foreign_key="facture.id", index=True
     )
 
-    numero_facture: str = Field(unique=True, index=True, max_length=50)
+    numero_facture: str = Field(index=True, max_length=50)
     date_emission: date = Field(default_factory=date.today)
     date_echeance: date | None = Field(default=None)
     devise: str = Field(default="EUR", max_length=3)
@@ -102,7 +112,9 @@ class Facture(SQLModel, table=True):
         back_populates="facture",
         sa_relationship_kwargs={"order_by": "FactureLigne.ordre"},
     )
-    statut_ref: "StatutFacture" = Relationship()
+    # Optional : la FK est non-nullable mais la relation peut ne pas se
+    # résoudre si le référentiel est incohérent (les appelants gardent le None)
+    statut_ref: Optional["StatutFacture"] = Relationship()
     createur: "Utilisateur" = Relationship()
     entreprise: "Entreprise" = Relationship()
     client: Optional["Client"] = Relationship()

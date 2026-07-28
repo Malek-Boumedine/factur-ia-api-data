@@ -45,8 +45,13 @@ def add_one_month(d: date) -> date:
     return date(year, month, min(d.day, last_day))
 
 
-async def _resoudre_plan_gratuit(session: AsyncSession) -> Abonnement:
-    """Retourne le plan gratuit seedé (repli d'expiration) ou lève une 500."""
+async def resoudre_plan_gratuit(session: AsyncSession) -> Abonnement:
+    """
+    Retourne le plan gratuit seedé (repli d'expiration) ou lève une 500.
+
+    Public : l'administration de plateforme s'en sert pour rouvrir un abonnement
+    lorsqu'elle réactive une entreprise dont la souscription a été résiliée.
+    """
     result = await session.exec(
         select(Abonnement).where(Abonnement.libelle == _FREE_PLAN_LIBELLE)
     )
@@ -110,7 +115,7 @@ async def reconcile_expired_subscription(
         return active
 
     # Souscription payante échue -> bascule atomique vers le plan gratuit.
-    free_plan = await _resoudre_plan_gratuit(session)
+    free_plan = await resoudre_plan_gratuit(session)
     active.statut = StatutSouscription.EXPIRE
     session.add(active)
 
