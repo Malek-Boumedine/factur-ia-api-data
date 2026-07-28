@@ -2,6 +2,40 @@
 
 <!-- version list -->
 
+## v1.9.0 (2026-07-28)
+
+### Bug Fixes
+
+- **clients**: Unicité du SIRET et du numéro de TVA par entreprise
+  ([`cc7c452`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/cc7c4522c5d43046c29a23b85b068a1d1575c19d))
+
+- **factures**: Unicité du numéro de facture par entreprise et non plus globale
+  ([`aff5cc4`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/aff5cc4b4b39c1d21a890a205fa90a758e31d1e4))
+
+### Features
+
+- **administration**: Gestion des utilisateurs, entreprises et abonnements par l'admin plateforme
+  ([`5ca5f96`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/5ca5f968227185a37f734d5ca24a12c60b082991))
+
+- **documents**: Liste paginée des documents et consultation du fichier original
+  ([`3f7cfd7`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/3f7cfd76a2d790f671d5be6a98d1f05eb1696e30))
+
+- **documents**: Réception et exposition du score par champ et du type de document OCR
+  ([`2e8795c`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/2e8795c7ee7dc949c426bec9679843317c588698))
+
+- **documents**: Suppression d'un document uploadé avec protection des factures liées
+  ([`8c77cce`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/8c77cceb493301cc5a615df39377c3c373390db3))
+
+- **factures**: Exposition du libellé de statut et filtre par famille sur la liste
+  ([`5f45bbd`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/5f45bbd2205164323cc2b0a218818b707eb19f64))
+
+- **factures**: Retry sur collision de numérotation lors de validations simultanées
+  ([`af01ac5`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/af01ac5f44476dde55dec24f255ac64a1b961527))
+
+- **factures**: Route d'agrégation des statistiques calculées en SQL
+  ([`18a0d49`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/18a0d493c97030ebe2c17eca98231a9adb9da04b))
+
+
 ## v1.8.0 (2026-07-27)
 
 ### Bug Fixes
