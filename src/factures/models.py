@@ -3,7 +3,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import JSON, TEXT, Column, DateTime, Numeric
+from sqlalchemy import JSON, TEXT, Column, DateTime, Index, Numeric
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
 from src.documents.models import Document
@@ -57,6 +57,11 @@ class Facture(SQLModel, table=True):
         UniqueConstraint(
             "id_entreprise", "numero_facture", name="unique_entreprise_numero_facture"
         ),
+        # Toutes les agrégations de statistiques (et la liste filtrée par
+        # période) attaquent la table par entreprise puis par date d'émission :
+        # l'index composite évite de filtrer les dates ligne à ligne après
+        # l'index simple sur id_entreprise.
+        Index("ix_facture_entreprise_date_emission", "id_entreprise", "date_emission"),
     )
 
     id: int | None = Field(default=None, primary_key=True)

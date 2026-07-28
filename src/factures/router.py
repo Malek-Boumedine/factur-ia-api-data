@@ -28,6 +28,7 @@ from src.factures.schemas import (
     FactureListItem,
     FactureReadWithLignes,
     FactureUpdate,
+    StatistiquesFactures,
 )
 from src.factures.service import (
     create_facture_brouillon,
@@ -35,6 +36,13 @@ from src.factures.service import (
     generer_avoir_brouillon,
     update_facture_brouillon,
     valider_facture_brouillon,
+)
+from src.factures.statistiques import (
+    DEVISE_PAR_DEFAUT,
+    LIMITE_TOP_CLIENTS_MAX,
+    LIMITE_TOP_CLIENTS_PAR_DEFAUT,
+    calculer_statistiques,
+    resoudre_periode,
 )
 from src.utilisateurs.models import Utilisateur
 
@@ -180,6 +188,87 @@ async def list_factures(
     page = await paginate(session, statement, pagination)
     page.items = [FactureListItem.from_facture(facture) for facture in page.items]
     return page
+
+
+# Déclarée AVANT `/{facture_id}` : FastAPI résout les routes dans l'ordre de
+# déclaration, et `/statistiques` serait sinon capturé par le paramètre de
+# chemin (422 sur la conversion en entier).
+@router.get("/statistiques", response_model=StatistiquesFactures)
+async def statistiques_factures(
+    session: SessionDep,
+    id_entreprise: TenantDep,
+    date_min: Annotated[
+        date | None,
+        Query(
+            description="Borne basse (incluse) sur la date d'émission. Par défaut : "
+            "premier jour du mois, 11 mois avant `date_max` (12 mois glissants)."
+        ),
+    ] = None,
+    date_max: Annotated[
+        date | None,
+        Query(
+            description="Borne haute (incluse) sur la date d'émission. "
+            "Par défaut : aujourd'hui."
+        ),
+    ] = None,
+    devise: Annotated[
+        str,
+        Query(
+            min_length=3,
+            max_length=3,
+            description="Devise des montants agrégés (ISO 4217). Les documents "
+            "libellés dans une autre devise sont exclus des totaux et signalés "
+            "dans `devises_exclues` : deux devises ne s'additionnent pas.",
+        ),
+    ] = DEVISE_PAR_DEFAUT,
+    limite_top_clients: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=LIMITE_TOP_CLIENTS_MAX,
+            description="Nombre de clients renvoyés dans `top_clients`.",
+        ),
+    ] = LIMITE_TOP_CLIENTS_PAR_DEFAUT,
+) -> Any:
+    """
+    Agrège les statistiques de facturation de l'entreprise active : chiffres
+    clés, répartition par statut, évolution mensuelle, top clients et encours.
+
+    Tout est calculé en base (SUM/COUNT/GROUP BY) : la réponse est exacte quel
+    que soit le volume, sans pagination ni plafond. Le périmètre couvre les
+    seuls documents **émis** (famille non-brouillon) de la période et de la
+    devise demandées ; les brouillons sont comptés à part dans `brouillons`.
+
+    Les avoirs sont **soustraits** de tous les montants, quel que soit le signe
+    sous lequel ils ont été enregistrés. Une facture annulée reste comptée
+    positivement : elle se neutralise avec son avoir.
+
+    Limites assumées, faute de suivi des règlements :
+    `restant_a_encaisser` compte une facture partiellement payée pour son
+    total (chiffre pessimiste), et `montant_en_retard` en est un
+    sous-ensemble — les deux ne s'additionnent pas.
+    """
+    # Une seule lecture de la date : la période et le calcul du retard doivent
+    # se référer au même « aujourd'hui », même à cheval sur minuit.
+    aujourd_hui = date.today()
+    date_min_effective, date_max_effective = resoudre_periode(
+        date_min, date_max, aujourd_hui
+    )
+    if date_min_effective > date_max_effective:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="date_min doit être antérieure ou égale à date_max.",
+        )
+
+    return await calculer_statistiques(
+        session=session,
+        id_entreprise=id_entreprise,
+        date_min=date_min_effective,
+        date_max=date_max_effective,
+        devise=devise.upper(),
+        limite_top_clients=limite_top_clients,
+        aujourd_hui=aujourd_hui,
+    )
 
 
 @router.get("/{facture_id}", response_model=FactureReadWithLignes)

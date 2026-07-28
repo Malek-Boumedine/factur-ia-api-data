@@ -2406,6 +2406,122 @@
         }
       }
     },
+    "/factures/statistiques": {
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Statistiques Factures",
+        "description": "Agrège les statistiques de facturation de l'entreprise active : chiffres\nclés, répartition par statut, évolution mensuelle, top clients et encours.\n\nTout est calculé en base (SUM/COUNT/GROUP BY) : la réponse est exacte quel\nque soit le volume, sans pagination ni plafond. Le périmètre couvre les\nseuls documents **émis** (famille non-brouillon) de la période et de la\ndevise demandées ; les brouillons sont comptés à part dans `brouillons`.\n\nLes avoirs sont **soustraits** de tous les montants, quel que soit le signe\nsous lequel ils ont été enregistrés. Une facture annulée reste comptée\npositivement : elle se neutralise avec son avoir.\n\nLimites assumées, faute de suivi des règlements :\n`restant_a_encaisser` compte une facture partiellement payée pour son\ntotal (chiffre pessimiste), et `montant_en_retard` en est un\nsous-ensemble — les deux ne s'additionnent pas.",
+        "operationId": "statistiques_factures_factures_statistiques_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "date_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne basse (incluse) sur la date d'émission. Par défaut : premier jour du mois, 11 mois avant `date_max` (12 mois glissants).",
+              "title": "Date Min"
+            },
+            "description": "Borne basse (incluse) sur la date d'émission. Par défaut : premier jour du mois, 11 mois avant `date_max` (12 mois glissants)."
+          },
+          {
+            "name": "date_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne haute (incluse) sur la date d'émission. Par défaut : aujourd'hui.",
+              "title": "Date Max"
+            },
+            "description": "Borne haute (incluse) sur la date d'émission. Par défaut : aujourd'hui."
+          },
+          {
+            "name": "devise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3,
+              "description": "Devise des montants agrégés (ISO 4217). Les documents libellés dans une autre devise sont exclus des totaux et signalés dans `devises_exclues` : deux devises ne s'additionnent pas.",
+              "default": "EUR",
+              "title": "Devise"
+            },
+            "description": "Devise des montants agrégés (ISO 4217). Les documents libellés dans une autre devise sont exclus des totaux et signalés dans `devises_exclues` : deux devises ne s'additionnent pas."
+          },
+          {
+            "name": "limite_top_clients",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "description": "Nombre de clients renvoyés dans `top_clients`.",
+              "default": 5,
+              "title": "Limite Top Clients"
+            },
+            "description": "Nombre de clients renvoyés dans `top_clients`."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatistiquesFactures"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/factures/{facture_id}": {
       "get": {
         "tags": [
@@ -4245,6 +4361,27 @@
         "title": "ClientUpdate",
         "description": "Schéma pour la mise à jour partielle d'un client (PATCH)."
       },
+      "DeviseExclue": {
+        "properties": {
+          "devise": {
+            "type": "string",
+            "title": "Devise",
+            "description": "Code devise ISO 4217 (ex: USD)."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents émis dans cette devise."
+          }
+        },
+        "type": "object",
+        "required": [
+          "devise",
+          "nombre"
+        ],
+        "title": "DeviseExclue",
+        "description": "Devise écartée des totaux monétaires."
+      },
       "DocumentRead": {
         "properties": {
           "id": {
@@ -5433,6 +5570,29 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "IndicateursPaiement": {
+        "properties": {
+          "montant_en_retard": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant En Retard",
+            "description": "Montant TTC des factures dont la date d'échéance est dépassée et qui ne sont ni payées ni annulées. Calculé sur ``date_echeance``, pas sur le statut ``en_retard``."
+          },
+          "restant_a_encaisser": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Restant A Encaisser",
+            "description": "Montant TTC des factures émises encore dues (ni payées, ni annulées). Chiffre **pessimiste** : faute de suivi des règlements, une facture partiellement payée compte pour son total."
+          }
+        },
+        "type": "object",
+        "required": [
+          "montant_en_retard",
+          "restant_a_encaisser"
+        ],
+        "title": "IndicateursPaiement",
+        "description": "Encours client. ``montant_en_retard`` est un sous-ensemble de\n``restant_a_encaisser`` : ne jamais additionner les deux."
+      },
       "LigneOcr": {
         "properties": {
           "designation": {
@@ -5807,6 +5967,29 @@
         ],
         "title": "Page[FactureListItem]"
       },
+      "PeriodeStatistiques": {
+        "properties": {
+          "date_min": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Min",
+            "description": "Borne basse incluse sur la date d'émission."
+          },
+          "date_max": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Max",
+            "description": "Borne haute incluse sur la date d'émission."
+          }
+        },
+        "type": "object",
+        "required": [
+          "date_min",
+          "date_max"
+        ],
+        "title": "PeriodeStatistiques",
+        "description": "Période effectivement agrégée (bornes incluses)."
+      },
       "ProfilUpdate": {
         "properties": {
           "nom": {
@@ -6089,6 +6272,178 @@
         "title": "SearchSireneSiretResponse",
         "description": "Schéma représentant les données renvoyées\npar l'API gouvernementale lors d'une recherche par SIRET.\nLes champs sont alignés avec ClientBase pour\nfaciliter le pré-remplissage côté front-end."
       },
+      "StatistiquesFactures": {
+        "properties": {
+          "periode": {
+            "$ref": "#/components/schemas/PeriodeStatistiques"
+          },
+          "devise": {
+            "type": "string",
+            "title": "Devise",
+            "description": "Devise des montants agrégés. Les documents libellés dans une autre devise sont exclus et signalés dans ``devises_exclues``."
+          },
+          "totaux": {
+            "$ref": "#/components/schemas/TotauxStatistiques"
+          },
+          "par_statut": {
+            "items": {
+              "$ref": "#/components/schemas/StatistiquesParStatut"
+            },
+            "type": "array",
+            "title": "Par Statut",
+            "description": "Répartition par statut, triée par libellé."
+          },
+          "par_mois": {
+            "items": {
+              "$ref": "#/components/schemas/StatistiquesParMois"
+            },
+            "type": "array",
+            "title": "Par Mois",
+            "description": "Série mensuelle continue et ordonnée couvrant toute la période : les mois sans document sont renvoyés à zéro."
+          },
+          "top_clients": {
+            "items": {
+              "$ref": "#/components/schemas/StatistiquesParClient"
+            },
+            "type": "array",
+            "title": "Top Clients",
+            "description": "Clients les plus contributeurs, du CA le plus élevé au plus faible."
+          },
+          "paiement": {
+            "$ref": "#/components/schemas/IndicateursPaiement"
+          },
+          "devises_exclues": {
+            "items": {
+              "$ref": "#/components/schemas/DeviseExclue"
+            },
+            "type": "array",
+            "title": "Devises Exclues",
+            "description": "Devises présentes sur la période mais écartées des totaux (on n'additionne jamais deux devises)."
+          },
+          "brouillons": {
+            "$ref": "#/components/schemas/TotauxBrouillons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "periode",
+          "devise",
+          "totaux",
+          "paiement",
+          "brouillons"
+        ],
+        "title": "StatistiquesFactures",
+        "description": "Agrégations de facturation calculées en base sur une période et une devise.\n\nPérimètre : uniquement les documents **émis** (famille non-brouillon) de\nl'entreprise active, dans la devise demandée. Les avoirs sont soustraits\nde tous les montants, quel que soit le signe de leur stockage. Une facture\nannulée reste comptée positivement : elle se neutralise avec son avoir."
+      },
+      "StatistiquesParClient": {
+        "properties": {
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client",
+            "description": "Null pour les factures sans client rattaché."
+          },
+          "nom_client": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom Client",
+            "description": "Raison sociale **actuelle** du client (fiche client, pas le snapshot figé de la facture) : le regroupement se fait par identité client, pour qu'un client renommé n'apparaisse pas deux fois. Null si aucun client n'est rattaché."
+          },
+          "ca_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ttc",
+            "description": "Montant TTC cumulé, avoirs soustraits."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents émis pour ce client."
+          }
+        },
+        "type": "object",
+        "required": [
+          "ca_ttc",
+          "nombre"
+        ],
+        "title": "StatistiquesParClient",
+        "description": "Contribution d'un client au chiffre d'affaires."
+      },
+      "StatistiquesParMois": {
+        "properties": {
+          "mois": {
+            "type": "string",
+            "title": "Mois",
+            "description": "Mois au format ``YYYY-MM``."
+          },
+          "ca_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ht",
+            "description": "Chiffre d'affaires HT du mois, net des avoirs."
+          },
+          "ca_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ttc",
+            "description": "Chiffre d'affaires TTC du mois, net des avoirs."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents émis dans le mois."
+          }
+        },
+        "type": "object",
+        "required": [
+          "mois",
+          "ca_ht",
+          "ca_ttc",
+          "nombre"
+        ],
+        "title": "StatistiquesParMois",
+        "description": "Point mensuel de la courbe d'évolution."
+      },
+      "StatistiquesParStatut": {
+        "properties": {
+          "statut": {
+            "type": "string",
+            "title": "Statut",
+            "description": "Libellé du statut tel que stocké dans le référentiel (ex: validée, payee, en_retard) ; clé à mapper côté front."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents portant ce statut."
+          },
+          "montant_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant Ttc",
+            "description": "Montant TTC cumulé, avoirs soustraits."
+          }
+        },
+        "type": "object",
+        "required": [
+          "statut",
+          "nombre",
+          "montant_ttc"
+        ],
+        "title": "StatistiquesParStatut",
+        "description": "Répartition d'un statut du référentiel."
+      },
       "StatutDocument": {
         "type": "string",
         "enum": [
@@ -6266,6 +6621,77 @@
         "type": "object",
         "title": "TauxTvaUpdate",
         "description": "Schéma de mise à jour partielle d'un taux de TVA (PATCH).\nTous les champs sont optionnels ; `est_actif=true` permet de réactiver\nun taux désactivé."
+      },
+      "TotauxBrouillons": {
+        "properties": {
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de brouillons."
+          },
+          "montant_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant Ttc",
+            "description": "Montant TTC cumulé des brouillons, avoirs soustraits."
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "montant_ttc"
+        ],
+        "title": "TotauxBrouillons",
+        "description": "Brouillons de la période, comptés à part du chiffre d'affaires."
+      },
+      "TotauxStatistiques": {
+        "properties": {
+          "ca_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ht",
+            "description": "Chiffre d'affaires HT net des avoirs."
+          },
+          "ca_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ttc",
+            "description": "Chiffre d'affaires TTC net des avoirs."
+          },
+          "tva_collectee": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tva Collectee",
+            "description": "TVA collectée nette des avoirs."
+          },
+          "nombre_factures": {
+            "type": "integer",
+            "title": "Nombre Factures",
+            "description": "Nombre de factures émises (type ``facture``, hors avoirs)."
+          },
+          "nombre_avoirs": {
+            "type": "integer",
+            "title": "Nombre Avoirs",
+            "description": "Nombre d'avoirs émis sur la période."
+          },
+          "panier_moyen": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Panier Moyen",
+            "description": "``ca_ttc`` divisé par ``nombre_factures`` (0 si aucune facture) : les avoirs pèsent sur le numérateur mais pas sur le dénominateur."
+          }
+        },
+        "type": "object",
+        "required": [
+          "ca_ht",
+          "ca_ttc",
+          "tva_collectee",
+          "nombre_factures",
+          "nombre_avoirs",
+          "panier_moyen"
+        ],
+        "title": "TotauxStatistiques",
+        "description": "Chiffres clés de la période, nets des avoirs."
       },
       "TypeFacture": {
         "type": "string",
