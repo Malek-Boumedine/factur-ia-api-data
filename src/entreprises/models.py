@@ -62,6 +62,16 @@ class Entreprise(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), onupdate=lambda: datetime.now(UTC)),
     )
 
+    # Suspension par un administrateur de plateforme. `est_actif` porte l'état
+    # d'accès (contrôlé par `verify_tenant_access` : une entreprise suspendue
+    # renvoie 403 sur toutes les routes tenant), distinct de l'état commercial
+    # porté par le statut de la souscription. Les deux sont mis à jour ensemble.
+    est_actif: bool = Field(default=True)
+    date_suspension: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    motif_suspension: str | None = Field(default=None, max_length=255)
+
     # relations
     forme_juridique: RefFormeJuridique | None = Relationship()
 
