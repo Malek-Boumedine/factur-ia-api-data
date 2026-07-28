@@ -40,3 +40,10 @@ class TypeFactureNonModifiableError(FacturationError):
         lié à une facture d'origine."""
 
     pass
+
+
+class NumerotationConcurrenceError(FacturationError):
+    """Levée quand l'attribution du numéro définitif échoue après plusieurs \
+        tentatives à cause de validations simultanées dans la même entreprise."""
+
+    pass

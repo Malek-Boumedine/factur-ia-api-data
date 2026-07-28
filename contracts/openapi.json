@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.7.0"
+    "version": "1.8.0"
   },
   "paths": {
     "/auth/token": {
@@ -2225,7 +2225,7 @@
           "Gestion des Factures"
         ],
         "summary": "List Factures",
-        "description": "Récupère les factures de l'entreprise active, avec recherche, filtres et\npagination — les plus récentes d'abord. La recherche et les filtres\ns'appliquent toujours à l'intérieur du périmètre de l'entreprise\n(isolation tenant).\n\nChaque élément expose ``nom_destinataire`` : snapshot figé pour une\nfacture validée, raison sociale du client lié pour un brouillon.",
+        "description": "Récupère les factures de l'entreprise active, avec recherche, filtres et\npagination — les plus récentes d'abord. La recherche et les filtres\ns'appliquent toujours à l'intérieur du périmètre de l'entreprise\n(isolation tenant).\n\nChaque élément expose ``nom_destinataire`` (snapshot figé pour une\nfacture validée, raison sociale du client lié pour un brouillon) et\n``libelle_statut`` (libellé du référentiel, pour le badge de statut).",
         "operationId": "list_factures_factures__get",
         "security": [
           {
@@ -2264,10 +2264,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée).",
+              "description": "Filtre sur le libellé du statut (insensible à la casse). Cas particulier : 'Validée' (ou 'validee'/'validees') sélectionne toute la famille non-brouillon (validée, payee, en_retard, statuts PDP…) pour l'onglet « Validées ». Toute autre valeur filtre sur le libellé exact (ex: Brouillon, payee, en_retard).",
               "title": "Statut"
             },
-            "description": "Filtre sur le libellé du statut (ex: Brouillon, Validée)."
+            "description": "Filtre sur le libellé du statut (insensible à la casse). Cas particulier : 'Validée' (ou 'validee'/'validees') sélectionne toute la famille non-brouillon (validée, payee, en_retard, statuts PDP…) pour l'onglet « Validées ». Toute autre valeur filtre sur le libellé exact (ex: Brouillon, payee, en_retard)."
           },
           {
             "name": "type_facture",
@@ -2406,13 +2406,129 @@
         }
       }
     },
+    "/factures/statistiques": {
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Statistiques Factures",
+        "description": "Agrège les statistiques de facturation de l'entreprise active : chiffres\nclés, répartition par statut, évolution mensuelle, top clients et encours.\n\nTout est calculé en base (SUM/COUNT/GROUP BY) : la réponse est exacte quel\nque soit le volume, sans pagination ni plafond. Le périmètre couvre les\nseuls documents **émis** (famille non-brouillon) de la période et de la\ndevise demandées ; les brouillons sont comptés à part dans `brouillons`.\n\nLes avoirs sont **soustraits** de tous les montants, quel que soit le signe\nsous lequel ils ont été enregistrés. Une facture annulée reste comptée\npositivement : elle se neutralise avec son avoir.\n\nLimites assumées, faute de suivi des règlements :\n`restant_a_encaisser` compte une facture partiellement payée pour son\ntotal (chiffre pessimiste), et `montant_en_retard` en est un\nsous-ensemble — les deux ne s'additionnent pas.",
+        "operationId": "statistiques_factures_factures_statistiques_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "date_min",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne basse (incluse) sur la date d'émission. Par défaut : premier jour du mois, 11 mois avant `date_max` (12 mois glissants).",
+              "title": "Date Min"
+            },
+            "description": "Borne basse (incluse) sur la date d'émission. Par défaut : premier jour du mois, 11 mois avant `date_max` (12 mois glissants)."
+          },
+          {
+            "name": "date_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Borne haute (incluse) sur la date d'émission. Par défaut : aujourd'hui.",
+              "title": "Date Max"
+            },
+            "description": "Borne haute (incluse) sur la date d'émission. Par défaut : aujourd'hui."
+          },
+          {
+            "name": "devise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3,
+              "description": "Devise des montants agrégés (ISO 4217). Les documents libellés dans une autre devise sont exclus des totaux et signalés dans `devises_exclues` : deux devises ne s'additionnent pas.",
+              "default": "EUR",
+              "title": "Devise"
+            },
+            "description": "Devise des montants agrégés (ISO 4217). Les documents libellés dans une autre devise sont exclus des totaux et signalés dans `devises_exclues` : deux devises ne s'additionnent pas."
+          },
+          {
+            "name": "limite_top_clients",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "description": "Nombre de clients renvoyés dans `top_clients`.",
+              "default": 5,
+              "title": "Limite Top Clients"
+            },
+            "description": "Nombre de clients renvoyés dans `top_clients`."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatistiquesFactures"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/factures/{facture_id}": {
       "get": {
         "tags": [
           "Gestion des Factures"
         ],
         "summary": "Get Facture",
-        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture.",
+        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture. Si la facture est issue\nd'un OCR, `extraction` expose les métadonnées d'analyse (score global,\ntype de document détecté, scores par champ) depuis l'extraction liée la\nplus récente ; null sinon.",
         "operationId": "get_facture_factures__facture_id__get",
         "security": [
           {
@@ -2588,7 +2704,7 @@
           "Gestion des Factures"
         ],
         "summary": "Valider Brouillon Endpoint",
-        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).\n\nRefusé (409) si la facture n'est pas un brouillon ou si le brouillon\nest incomplet (aucun client associé).",
+        "description": "Valide un brouillon de facture.\nGénère le numéro définitif et fige les données du client (Snapshot).\n\nRefusé (409) si la facture n'est pas un brouillon, si le brouillon est\nincomplet (aucun client associé), ou en cas de conflit de numérotation\npersistant lors de validations simultanées (réessayer la requête).",
         "operationId": "valider_brouillon_endpoint_factures__facture_id__valider_post",
         "security": [
           {
@@ -2762,6 +2878,101 @@
         }
       }
     },
+    "/documents/": {
+      "get": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "List Documents",
+        "description": "Liste les documents uploadés de l'entreprise active, avec filtre par\nstatut et pagination — les plus récents d'abord. Le filtre s'applique\ntoujours à l'intérieur du périmètre de l'entreprise (isolation tenant).\n\nChaque élément expose ``id_facture`` : l'id du brouillon généré par\nl'OCR pour un document traité, null sinon (même sémantique que la\nroute de suivi).",
+        "operationId": "list_documents_documents__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StatutDocument"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut du document (ex: en_attente, traité).",
+              "title": "Statut"
+            },
+            "description": "Filtre sur le statut du document (ex: en_attente, traité)."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_DocumentRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{id_document}": {
       "get": {
         "tags": [
@@ -2807,6 +3018,108 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Delete Document Endpoint",
+        "description": "Supprime un document uploadé, ses extractions OCR et son fichier physique.\n\nRefusé (409) si une facture — brouillon ou validée — référence le\ndocument : le brouillon doit être supprimé d'abord ; une facture validée,\nimmuable, impose de conserver le document (trace pour l'audit comptable).\n\nLe fichier physique n'est supprimé qu'après le commit réussi : une\ntransaction échouée ne laisse jamais un enregistrement sans fichier.\nUn fichier déjà absent du disque n'empêche pas la suppression (204).",
+        "operationId": "delete_document_endpoint_documents__id_document__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_document",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Document"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{id_document}/fichier": {
+      "get": {
+        "tags": [
+          "Documents & OCR"
+        ],
+        "summary": "Get Document File",
+        "description": "Renvoie le fichier original d'un document (PDF ou image), en streaming,\naprès vérification qu'il appartient bien à l'entreprise active\n(isolation des données : même 404 indistinct que la route de suivi).\n\nLe chemin est reconstruit depuis le nom stocké en base (jamais depuis\nune entrée client) et doit rester sous le répertoire d'upload : un\nenregistrement corrompu ne permet pas de lire ailleurs sur le disque.",
+        "operationId": "get_document_file_documents__id_document__fichier_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_document",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Document"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -2965,6 +3278,991 @@
             "OAuth2PasswordBearer": []
           }
         ]
+      }
+    },
+    "/administration/entreprises": {
+      "get": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "List Entreprises",
+        "description": "Liste paginée des entreprises abonnées, avec leur plan et son statut, leur\neffectif et leur nombre de factures.",
+        "operationId": "list_entreprises_administration_entreprises_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "recherche",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur la raison sociale ou le SIRET.",
+              "title": "Recherche"
+            },
+            "description": "Recherche sur la raison sociale ou le SIRET."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur l'état d'activité (faux = suspendue).",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur l'état d'activité (faux = suspendue)."
+          },
+          {
+            "name": "statut_abonnement",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StatutSouscription"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut de la souscription courante.",
+              "title": "Statut Abonnement"
+            },
+            "description": "Filtre sur le statut de la souscription courante."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_EntrepriseAdminListItem_"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/entreprises/{entreprise_id}": {
+      "get": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Get Entreprise",
+        "description": "Détail d'une entreprise : ses membres avec leur rôle, l'historique de ses\nsouscriptions, et la volumétrie de ses données.\n\nLes compteurs renseignent directement sur ce qui bloquerait une suppression.",
+        "operationId": "get_entreprise_administration_entreprises__entreprise_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAdminDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Entreprise introuvable."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Update Entreprise",
+        "description": "Modifie l'identité légale d'une entreprise : raison sociale, SIRET, forme\njuridique. Aucun autre champ n'est modifiable par cette voie.\n\nLa correction ne vaut que pour l'avenir : les factures déjà émises\nconservent l'instantané figé de leur émetteur et ne sont jamais réécrites.",
+        "operationId": "update_entreprise_administration_entreprises__entreprise_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntrepriseAdminUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAdminRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Entreprise introuvable."
+          },
+          "409": {
+            "description": "SIRET déjà rattaché à une autre entreprise."
+          },
+          "422": {
+            "description": "SIRET invalide, ou forme juridique inconnue ou inactive."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Delete Entreprise",
+        "description": "Supprime une entreprise **vierge de toute donnée** (doublon, compte de test,\ninscription abandonnée).\n\nUne seule facture émise rend la suppression définitivement impossible (403,\nsans contournement possible) ; toute autre donnée la bloque en 409. Dans les\ndeux cas, la suspension est la voie à suivre.",
+        "operationId": "delete_entreprise_administration_entreprises__entreprise_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Entreprise porteuse de factures émises : suppression définitivement impossible (inaltérabilité et conservation légale)."
+          },
+          "404": {
+            "description": "Entreprise introuvable."
+          },
+          "409": {
+            "description": "Entreprise contenant encore des données."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/entreprises/{entreprise_id}/suspendre": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Suspendre Entreprise",
+        "description": "Suspend une entreprise : ses membres reçoivent un 403 sur toutes les routes\ntenant et sa souscription courante passe en `SUSPENDU`.\n\nRéversible et sans perte : c'est la réponse recommandée face à une\nentreprise dont les données interdisent la suppression.",
+        "operationId": "suspendre_entreprise_administration_entreprises__entreprise_id__suspendre_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuspensionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAdminRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Entreprise introuvable."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/entreprises/{entreprise_id}/reactiver": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Reactiver Entreprise",
+        "description": "Rétablit l'accès d'une entreprise suspendue et lui restitue un abonnement\nactif (réactivé, ou rouvert sur le plan gratuit s'il avait été résilié).",
+        "operationId": "reactiver_entreprise_administration_entreprises__entreprise_id__reactiver_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAdminRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Entreprise introuvable."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/entreprises/{entreprise_id}/abonnement/changer": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Changer Plan",
+        "description": "Change le plan d'une entreprise ciblée par son identifiant.\n\nMême logique métier que la voie utilisateur (`/abonnements/me/changer`) :\nseule l'origine de l'entreprise diffère — un paramètre d'URL ici, le header\ntenant là-bas.",
+        "operationId": "changer_plan_administration_entreprises__entreprise_id__abonnement_changer_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangementPlanAdminRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAbonnementRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Entreprise ou plan cible introuvable."
+          },
+          "409": {
+            "description": "Déjà sur ce plan, ou trop d'utilisateurs actifs pour le plan cible."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/entreprises/{entreprise_id}/abonnement/prolonger": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Prolonger Abonnement",
+        "description": "Prolonge d'un mois l'abonnement payant d'une entreprise ciblée par son id.",
+        "operationId": "prolonger_abonnement_administration_entreprises__entreprise_id__abonnement_prolonger_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAbonnementRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Entreprise introuvable, ou aucune souscription active à prolonger."
+          },
+          "409": {
+            "description": "Le plan gratuit n'expire pas et ne peut pas être prolongé."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/entreprises/{entreprise_id}/abonnement/resilier": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Resilier Abonnement",
+        "description": "Résilie l'abonnement d'une entreprise et coupe son accès.\n\nÀ la différence de la suspension — mesure temporaire dont on attend la levée\n— la résiliation clôt la relation commerciale. Aucune donnée n'est touchée :\n`reactiver` rouvre le service sur le plan gratuit.",
+        "operationId": "resilier_abonnement_administration_entreprises__entreprise_id__abonnement_resilier_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entreprise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Entreprise Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuspensionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntrepriseAbonnementRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Entreprise introuvable, ou aucune souscription à résilier."
+          },
+          "409": {
+            "description": "Souscription déjà résiliée."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/utilisateurs": {
+      "get": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "List Utilisateurs",
+        "description": "Liste paginée des utilisateurs, toutes entreprises confondues, avec leurs\nrattachements.",
+        "operationId": "list_utilisateurs_administration_utilisateurs_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "recherche",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Recherche sur l'email, le nom ou le prénom.",
+              "title": "Recherche"
+            },
+            "description": "Recherche sur l'email, le nom ou le prénom."
+          },
+          {
+            "name": "entreprise_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restreint aux membres de cette entreprise.",
+              "title": "Entreprise Id"
+            },
+            "description": "Restreint aux membres de cette entreprise."
+          },
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur l'état d'activité du compte.",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur l'état d'activité du compte."
+          },
+          {
+            "name": "admin_plateforme",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut d'admin plateforme.",
+              "title": "Admin Plateforme"
+            },
+            "description": "Filtre sur le statut d'admin plateforme."
+          },
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Nombre d'éléments à ignorer (offset).",
+              "default": 0,
+              "title": "Skip"
+            },
+            "description": "Nombre d'éléments à ignorer (offset)."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Nombre maximum d'éléments à renvoyer (max 100).",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Nombre maximum d'éléments à renvoyer (max 100)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_UtilisateurAdminListItem_"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/utilisateurs/{utilisateur_id}": {
+      "get": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Get Utilisateur",
+        "description": "Détail d'un utilisateur : ses entreprises de rattachement et la volumétrie\ndes données qu'il a créées (laquelle conditionne sa suppression).",
+        "operationId": "get_utilisateur_administration_utilisateurs__utilisateur_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurAdminDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Utilisateur introuvable."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Delete Utilisateur",
+        "description": "Supprime physiquement un compte — opération de dernier recours, en pratique\nréservée aux comptes créés puis jamais utilisés.\n\nRefusée si le compte est protégé, s'il s'agit du sien, s'il est le dernier\nadministrateur de plateforme, s'il administre seul une entreprise peuplée,\nou s'il a créé la moindre donnée comptable. Dans ce dernier cas, la\ndésactivation est la voie à suivre : savoir qui a émis une facture fait\npartie de la piste d'audit.",
+        "operationId": "delete_utilisateur_administration_utilisateurs__utilisateur_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Compte protégé, ou auto-suppression."
+          },
+          "404": {
+            "description": "Utilisateur introuvable."
+          },
+          "409": {
+            "description": "Dernier administrateur de plateforme, seul administrateur d'une entreprise peuplée, ou auteur de données comptables."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/utilisateurs/{utilisateur_id}/desactiver": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Desactiver Utilisateur",
+        "description": "Désactive un compte utilisateur — la voie recommandée, réversible et sans\nperte de données.\n\nL'effet est immédiat : un compte inactif est refusé à l'authentification,\nquel que soit le jeton présenté. Un administrateur ne peut pas se désactiver\nlui-même, et le compte racine protégé reste intouchable.",
+        "operationId": "desactiver_utilisateur_administration_utilisateurs__utilisateur_id__desactiver_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurAdminDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Auto-désactivation, ou compte protégé."
+          },
+          "404": {
+            "description": "Utilisateur introuvable."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/administration/utilisateurs/{utilisateur_id}/reactiver": {
+      "post": {
+        "tags": [
+          "Administration Plateforme"
+        ],
+        "summary": "Reactiver Utilisateur",
+        "description": "Réactive un compte utilisateur.\n\nN'est pas soumise à la limite d'utilisateurs du plan : l'administrateur de\nplateforme agit en support. Cette limite continue de s'appliquer\nintégralement aux utilisateurs normaux.",
+        "operationId": "reactiver_utilisateur_administration_utilisateurs__utilisateur_id__reactiver_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "utilisateur_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Utilisateur Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UtilisateurAdminDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentification requise."
+          },
+          "403": {
+            "description": "Accès réservé aux administrateurs de la plateforme."
+          },
+          "404": {
+            "description": "Utilisateur introuvable."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/health": {
@@ -3640,6 +4938,21 @@
         "title": "ChangementMotDePasseRequest",
         "description": "Changement de mot de passe par un utilisateur connecté.\n\nLe mot de passe actuel est exigé pour re-vérifier l'identité avant tout\nchangement (jamais de modification à l'aveugle sur une session ouverte). Le\nnouveau suit la même politique de robustesse que l'inscription et la\nréinitialisation (`min_length=8`)."
       },
+      "ChangementPlanAdminRequest": {
+        "properties": {
+          "id_abonnement": {
+            "type": "integer",
+            "title": "Id Abonnement",
+            "description": "Identifiant du plan d'abonnement cible."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_abonnement"
+        ],
+        "title": "ChangementPlanAdminRequest",
+        "description": "Requête de changement de plan pour une entreprise ciblée par son id."
+      },
       "ChangementPlanRequest": {
         "properties": {
           "id_abonnement": {
@@ -4048,6 +5361,96 @@
         "title": "ClientUpdate",
         "description": "Schéma pour la mise à jour partielle d'un client (PATCH)."
       },
+      "CompteursEntreprise": {
+        "properties": {
+          "factures_total": {
+            "type": "integer",
+            "title": "Factures Total",
+            "default": 0
+          },
+          "factures_brouillon": {
+            "type": "integer",
+            "title": "Factures Brouillon",
+            "default": 0
+          },
+          "factures_scellees": {
+            "type": "integer",
+            "title": "Factures Scellees",
+            "default": 0
+          },
+          "clients": {
+            "type": "integer",
+            "title": "Clients",
+            "default": 0
+          },
+          "documents": {
+            "type": "integer",
+            "title": "Documents",
+            "default": 0
+          },
+          "produits": {
+            "type": "integer",
+            "title": "Produits",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "CompteursEntreprise",
+        "description": "Volumétrie des données rattachées à une entreprise.\n\n`factures_scellees` compte les factures ayant quitté l'état brouillon :\nc'est ce compteur qui rend la suppression de l'entreprise définitivement\nimpossible (inaltérabilité et obligation de conservation)."
+      },
+      "CompteursUtilisateur": {
+        "properties": {
+          "factures_creees": {
+            "type": "integer",
+            "title": "Factures Creees",
+            "default": 0
+          },
+          "paiements_crees": {
+            "type": "integer",
+            "title": "Paiements Crees",
+            "default": 0
+          },
+          "clients_crees": {
+            "type": "integer",
+            "title": "Clients Crees",
+            "default": 0
+          },
+          "documents_charges": {
+            "type": "integer",
+            "title": "Documents Charges",
+            "default": 0
+          },
+          "produits_crees": {
+            "type": "integer",
+            "title": "Produits Crees",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "CompteursUtilisateur",
+        "description": "Volumétrie des données créées par un utilisateur.\n\nToute valeur non nulle interdit la suppression physique du compte : ces\nlignes portent une responsabilité nominative (qui a émis la facture) et\nsont référencées en base sans cascade."
+      },
+      "DeviseExclue": {
+        "properties": {
+          "devise": {
+            "type": "string",
+            "title": "Devise",
+            "description": "Code devise ISO 4217 (ex: USD)."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents émis dans cette devise."
+          }
+        },
+        "type": "object",
+        "required": [
+          "devise",
+          "nombre"
+        ],
+        "title": "DeviseExclue",
+        "description": "Devise écartée des totaux monétaires."
+      },
       "DocumentRead": {
         "properties": {
           "id": {
@@ -4140,6 +5543,378 @@
         ],
         "title": "EntrepriseAbonnementRead",
         "description": "Détails de la souscription d'une entreprise à un abonnement."
+      },
+      "EntrepriseAdminDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_entreprise": {
+            "type": "string",
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret"
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          },
+          "forme_juridique": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forme Juridique",
+            "description": "Libellé de la forme juridique (ex : SAS)."
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Faux si l'entreprise est suspendue : ses membres reçoivent alors un 403 sur toutes les routes tenant."
+          },
+          "date_suspension": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Suspension"
+          },
+          "motif_suspension": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif Suspension"
+          },
+          "souscription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SouscriptionAdminRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Souscription courante (la plus récente), quel que soit son statut — une entreprise suspendue conserve la trace de son plan."
+          },
+          "nombre_utilisateurs": {
+            "type": "integer",
+            "title": "Nombre Utilisateurs",
+            "default": 0
+          },
+          "nombre_utilisateurs_actifs": {
+            "type": "integer",
+            "title": "Nombre Utilisateurs Actifs",
+            "default": 0
+          },
+          "nombre_factures": {
+            "type": "integer",
+            "title": "Nombre Factures",
+            "default": 0
+          },
+          "membres": {
+            "items": {
+              "$ref": "#/components/schemas/MembreEntrepriseRead"
+            },
+            "type": "array",
+            "title": "Membres"
+          },
+          "souscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/SouscriptionAdminRead"
+            },
+            "type": "array",
+            "title": "Souscriptions",
+            "description": "Historique complet, du plus récent au plus ancien."
+          },
+          "compteurs": {
+            "$ref": "#/components/schemas/CompteursEntreprise"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_entreprise",
+          "date_creation",
+          "est_actif"
+        ],
+        "title": "EntrepriseAdminDetail",
+        "description": "Détail d'une entreprise : membres, historique d'abonnement, volumétrie."
+      },
+      "EntrepriseAdminListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_entreprise": {
+            "type": "string",
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret"
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          },
+          "forme_juridique": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forme Juridique",
+            "description": "Libellé de la forme juridique (ex : SAS)."
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Faux si l'entreprise est suspendue : ses membres reçoivent alors un 403 sur toutes les routes tenant."
+          },
+          "date_suspension": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Suspension"
+          },
+          "motif_suspension": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif Suspension"
+          },
+          "souscription": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SouscriptionAdminRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Souscription courante (la plus récente), quel que soit son statut — une entreprise suspendue conserve la trace de son plan."
+          },
+          "nombre_utilisateurs": {
+            "type": "integer",
+            "title": "Nombre Utilisateurs",
+            "default": 0
+          },
+          "nombre_utilisateurs_actifs": {
+            "type": "integer",
+            "title": "Nombre Utilisateurs Actifs",
+            "default": 0
+          },
+          "nombre_factures": {
+            "type": "integer",
+            "title": "Nombre Factures",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_entreprise",
+          "date_creation",
+          "est_actif"
+        ],
+        "title": "EntrepriseAdminListItem",
+        "description": "Ligne de la liste des entreprises abonnées (vue administrateur)."
+      },
+      "EntrepriseAdminRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom_entreprise": {
+            "type": "string",
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret"
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_modification": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Modification"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif"
+          },
+          "date_suspension": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Suspension"
+          },
+          "motif_suspension": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif Suspension"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom_entreprise",
+          "date_creation",
+          "date_modification",
+          "est_actif"
+        ],
+        "title": "EntrepriseAdminRead",
+        "description": "État d'une entreprise après une opération d'administration.\n\nDistinct d'`EntrepriseRead` (contrat des routes tenant) : il expose l'état\nde suspension, sans lequel l'administrateur ne verrait pas le résultat de\nl'action qu'il vient de déclencher."
+      },
+      "EntrepriseAdminUpdate": {
+        "properties": {
+          "nom_entreprise": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom Entreprise"
+          },
+          "siret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 14,
+                "minLength": 14
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Siret",
+            "description": "SIRET à 14 chiffres. Ne réécrit jamais les factures déjà émises, qui en conservent un instantané figé."
+          },
+          "id_forme_juridique": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Forme Juridique"
+          }
+        },
+        "type": "object",
+        "title": "EntrepriseAdminUpdate",
+        "description": "Champs d'une entreprise modifiables par un administrateur de plateforme.\n\nRestreint volontairement à l'identité légale. Les dates de création et de\nmodification, l'état de suspension et l'abonnement ne sont pas modifiables\nici : ils relèvent d'endpoints dédiés ou du système."
       },
       "EntrepriseCreate": {
         "properties": {
@@ -4235,6 +6010,51 @@
         ],
         "title": "EntrepriseRead",
         "description": "Schéma de sortie d'une entreprise."
+      },
+      "ExtractionOcrRead": {
+        "properties": {
+          "score_confiance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Confiance"
+          },
+          "type_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Document"
+          },
+          "par_champ": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string",
+                  "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Par Champ"
+          }
+        },
+        "type": "object",
+        "title": "ExtractionOcrRead",
+        "description": "Métadonnées OCR exposées au front sur le détail d'une facture.\n\nRegroupe ce qui vient de l'analyse IA pour le récapitulatif du brouillon :\nscore global, type de document détecté et scores par champ (reparsés en\nDecimal depuis les chaînes stockées). Null champ par champ si non calculé."
       },
       "FactureCreate": {
         "properties": {
@@ -4757,6 +6577,18 @@
             ],
             "title": "Nom Destinataire",
             "description": "Raison sociale du destinataire : snapshot figé pour une facture validée, sinon client lié (brouillon)"
+          },
+          "libelle_statut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle Statut",
+            "description": "Libellé du statut tel que stocké dans le référentiel (ex: brouillon, validée, payee, en_retard) ; clé à mapper côté front pour l'affichage du badge. Null si le référentiel est incohérent."
           }
         },
         "type": "object",
@@ -4987,6 +6819,17 @@
             },
             "type": "array",
             "title": "Lignes"
+          },
+          "extraction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractionOcrRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Métadonnées de l'extraction OCR à l'origine de la facture (score global, type de document détecté, scores par champ). Null si la facture n'est pas issue d'un OCR ; résolu uniquement sur la route de détail (null sur les réponses de création/modification)."
           }
         },
         "type": "object",
@@ -5168,6 +7011,29 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "IndicateursPaiement": {
+        "properties": {
+          "montant_en_retard": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant En Retard",
+            "description": "Montant TTC des factures dont la date d'échéance est dépassée et qui ne sont ni payées ni annulées. Calculé sur ``date_echeance``, pas sur le statut ``en_retard``."
+          },
+          "restant_a_encaisser": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Restant A Encaisser",
+            "description": "Montant TTC des factures émises encore dues (ni payées, ni annulées). Chiffre **pessimiste** : faute de suivi des règlements, une facture partiellement payée compte pour son total."
+          }
+        },
+        "type": "object",
+        "required": [
+          "montant_en_retard",
+          "restant_a_encaisser"
+        ],
+        "title": "IndicateursPaiement",
+        "description": "Encours client. ``montant_en_retard`` est un sous-ensemble de\n``restant_a_encaisser`` : ne jamais additionner les deux."
+      },
       "LigneOcr": {
         "properties": {
           "designation": {
@@ -5219,6 +7085,80 @@
           "taux_tva"
         ],
         "title": "LigneOcr"
+      },
+      "MembreEntrepriseRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom": {
+            "type": "string",
+            "title": "Nom"
+          },
+          "prenom": {
+            "type": "string",
+            "title": "Prenom"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif"
+          },
+          "admin_plateforme": {
+            "type": "boolean",
+            "title": "Admin Plateforme"
+          },
+          "compte_protege": {
+            "type": "boolean",
+            "title": "Compte Protege"
+          },
+          "est_admin": {
+            "type": "boolean",
+            "title": "Est Admin",
+            "description": "Droit d'administration au sein de cette entreprise."
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "date_derniere_connexion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Derniere Connexion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom",
+          "prenom",
+          "email",
+          "est_actif",
+          "admin_plateforme",
+          "compte_protege",
+          "est_admin"
+        ],
+        "title": "MembreEntrepriseRead",
+        "description": "Membre d'une entreprise, vu depuis l'administration de plateforme."
       },
       "MessageResponse": {
         "properties": {
@@ -5367,6 +7307,45 @@
             "type": "array",
             "title": "Lignes",
             "default": []
+          },
+          "type_document": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "devis",
+                  "facture",
+                  "avoir",
+                  "inconnu"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Document"
+          },
+          "par_champ": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Par Champ"
           }
         },
         "type": "object",
@@ -5441,6 +7420,68 @@
         ],
         "title": "Page[ClientRead]"
       },
+      "Page_DocumentRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[DocumentRead]"
+      },
+      "Page_EntrepriseAdminListItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EntrepriseAdminListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[EntrepriseAdminListItem]"
+      },
       "Page_FactureListItem_": {
         "properties": {
           "items": {
@@ -5471,6 +7512,60 @@
           "limit"
         ],
         "title": "Page[FactureListItem]"
+      },
+      "Page_UtilisateurAdminListItem_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UtilisateurAdminListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "skip": {
+            "type": "integer",
+            "title": "Skip"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "Page[UtilisateurAdminListItem]"
+      },
+      "PeriodeStatistiques": {
+        "properties": {
+          "date_min": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Min",
+            "description": "Borne basse incluse sur la date d'émission."
+          },
+          "date_max": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Max",
+            "description": "Borne haute incluse sur la date d'émission."
+          }
+        },
+        "type": "object",
+        "required": [
+          "date_min",
+          "date_max"
+        ],
+        "title": "PeriodeStatistiques",
+        "description": "Période effectivement agrégée (bornes incluses)."
       },
       "ProfilUpdate": {
         "properties": {
@@ -5557,6 +7652,36 @@
         "type": "object",
         "title": "ProfilUpdate",
         "description": "Mise à jour partielle du profil par l'utilisateur lui-même (self-update).\n\nVolontairement restreint : ni `email` (modifiable uniquement via l'endpoint\ndédié sécurisé `POST /utilisateurs/me/changer-email`, qui exige le mot de\npasse actuel) ni `est_actif` (un utilisateur ne peut pas se désactiver\nlui-même). Ces deux champs restent réservés à la voie admin\n(`UtilisateurTeamUpdate`)."
+      },
+      "RattachementEntrepriseRead": {
+        "properties": {
+          "id_entreprise": {
+            "type": "integer",
+            "title": "Id Entreprise"
+          },
+          "nom_entreprise": {
+            "type": "string",
+            "title": "Nom Entreprise"
+          },
+          "est_admin": {
+            "type": "boolean",
+            "title": "Est Admin"
+          },
+          "entreprise_active": {
+            "type": "boolean",
+            "title": "Entreprise Active",
+            "description": "Faux si l'entreprise de rattachement est suspendue."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_entreprise",
+          "nom_entreprise",
+          "est_admin",
+          "entreprise_active"
+        ],
+        "title": "RattachementEntrepriseRead",
+        "description": "Rattachement d'un utilisateur à une entreprise."
       },
       "ReinitialisationRequest": {
         "properties": {
@@ -5754,6 +7879,249 @@
         "title": "SearchSireneSiretResponse",
         "description": "Schéma représentant les données renvoyées\npar l'API gouvernementale lors d'une recherche par SIRET.\nLes champs sont alignés avec ClientBase pour\nfaciliter le pré-remplissage côté front-end."
       },
+      "SouscriptionAdminRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "id_abonnement": {
+            "type": "integer",
+            "title": "Id Abonnement"
+          },
+          "libelle_abonnement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle Abonnement"
+          },
+          "tarif": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tarif"
+          },
+          "date_debut": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Debut"
+          },
+          "date_fin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Fin"
+          },
+          "statut": {
+            "$ref": "#/components/schemas/StatutSouscription"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "id_abonnement",
+          "date_debut",
+          "date_fin",
+          "statut",
+          "date_creation"
+        ],
+        "title": "SouscriptionAdminRead",
+        "description": "Souscription d'une entreprise, enrichie du libellé et du tarif du plan."
+      },
+      "StatistiquesFactures": {
+        "properties": {
+          "periode": {
+            "$ref": "#/components/schemas/PeriodeStatistiques"
+          },
+          "devise": {
+            "type": "string",
+            "title": "Devise",
+            "description": "Devise des montants agrégés. Les documents libellés dans une autre devise sont exclus et signalés dans ``devises_exclues``."
+          },
+          "totaux": {
+            "$ref": "#/components/schemas/TotauxStatistiques"
+          },
+          "par_statut": {
+            "items": {
+              "$ref": "#/components/schemas/StatistiquesParStatut"
+            },
+            "type": "array",
+            "title": "Par Statut",
+            "description": "Répartition par statut, triée par libellé."
+          },
+          "par_mois": {
+            "items": {
+              "$ref": "#/components/schemas/StatistiquesParMois"
+            },
+            "type": "array",
+            "title": "Par Mois",
+            "description": "Série mensuelle continue et ordonnée couvrant toute la période : les mois sans document sont renvoyés à zéro."
+          },
+          "top_clients": {
+            "items": {
+              "$ref": "#/components/schemas/StatistiquesParClient"
+            },
+            "type": "array",
+            "title": "Top Clients",
+            "description": "Clients les plus contributeurs, du CA le plus élevé au plus faible."
+          },
+          "paiement": {
+            "$ref": "#/components/schemas/IndicateursPaiement"
+          },
+          "devises_exclues": {
+            "items": {
+              "$ref": "#/components/schemas/DeviseExclue"
+            },
+            "type": "array",
+            "title": "Devises Exclues",
+            "description": "Devises présentes sur la période mais écartées des totaux (on n'additionne jamais deux devises)."
+          },
+          "brouillons": {
+            "$ref": "#/components/schemas/TotauxBrouillons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "periode",
+          "devise",
+          "totaux",
+          "paiement",
+          "brouillons"
+        ],
+        "title": "StatistiquesFactures",
+        "description": "Agrégations de facturation calculées en base sur une période et une devise.\n\nPérimètre : uniquement les documents **émis** (famille non-brouillon) de\nl'entreprise active, dans la devise demandée. Les avoirs sont soustraits\nde tous les montants, quel que soit le signe de leur stockage. Une facture\nannulée reste comptée positivement : elle se neutralise avec son avoir."
+      },
+      "StatistiquesParClient": {
+        "properties": {
+          "id_client": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Client",
+            "description": "Null pour les factures sans client rattaché."
+          },
+          "nom_client": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nom Client",
+            "description": "Raison sociale **actuelle** du client (fiche client, pas le snapshot figé de la facture) : le regroupement se fait par identité client, pour qu'un client renommé n'apparaisse pas deux fois. Null si aucun client n'est rattaché."
+          },
+          "ca_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ttc",
+            "description": "Montant TTC cumulé, avoirs soustraits."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents émis pour ce client."
+          }
+        },
+        "type": "object",
+        "required": [
+          "ca_ttc",
+          "nombre"
+        ],
+        "title": "StatistiquesParClient",
+        "description": "Contribution d'un client au chiffre d'affaires."
+      },
+      "StatistiquesParMois": {
+        "properties": {
+          "mois": {
+            "type": "string",
+            "title": "Mois",
+            "description": "Mois au format ``YYYY-MM``."
+          },
+          "ca_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ht",
+            "description": "Chiffre d'affaires HT du mois, net des avoirs."
+          },
+          "ca_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ttc",
+            "description": "Chiffre d'affaires TTC du mois, net des avoirs."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents émis dans le mois."
+          }
+        },
+        "type": "object",
+        "required": [
+          "mois",
+          "ca_ht",
+          "ca_ttc",
+          "nombre"
+        ],
+        "title": "StatistiquesParMois",
+        "description": "Point mensuel de la courbe d'évolution."
+      },
+      "StatistiquesParStatut": {
+        "properties": {
+          "statut": {
+            "type": "string",
+            "title": "Statut",
+            "description": "Libellé du statut tel que stocké dans le référentiel (ex: validée, payee, en_retard) ; clé à mapper côté front."
+          },
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de documents portant ce statut."
+          },
+          "montant_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant Ttc",
+            "description": "Montant TTC cumulé, avoirs soustraits."
+          }
+        },
+        "type": "object",
+        "required": [
+          "statut",
+          "nombre",
+          "montant_ttc"
+        ],
+        "title": "StatistiquesParStatut",
+        "description": "Répartition d'un statut du référentiel."
+      },
       "StatutDocument": {
         "type": "string",
         "enum": [
@@ -5774,6 +8142,26 @@
           "annulé"
         ],
         "title": "StatutSouscription"
+      },
+      "SuspensionRequest": {
+        "properties": {
+          "motif": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motif",
+            "description": "Raison de la suspension, conservée pour le support."
+          }
+        },
+        "type": "object",
+        "title": "SuspensionRequest",
+        "description": "Motif facultatif accompagnant la suspension d'une entreprise."
       },
       "TauxTvaCreate": {
         "properties": {
@@ -5932,6 +8320,77 @@
         "title": "TauxTvaUpdate",
         "description": "Schéma de mise à jour partielle d'un taux de TVA (PATCH).\nTous les champs sont optionnels ; `est_actif=true` permet de réactiver\nun taux désactivé."
       },
+      "TotauxBrouillons": {
+        "properties": {
+          "nombre": {
+            "type": "integer",
+            "title": "Nombre",
+            "description": "Nombre de brouillons."
+          },
+          "montant_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Montant Ttc",
+            "description": "Montant TTC cumulé des brouillons, avoirs soustraits."
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "montant_ttc"
+        ],
+        "title": "TotauxBrouillons",
+        "description": "Brouillons de la période, comptés à part du chiffre d'affaires."
+      },
+      "TotauxStatistiques": {
+        "properties": {
+          "ca_ht": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ht",
+            "description": "Chiffre d'affaires HT net des avoirs."
+          },
+          "ca_ttc": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Ca Ttc",
+            "description": "Chiffre d'affaires TTC net des avoirs."
+          },
+          "tva_collectee": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tva Collectee",
+            "description": "TVA collectée nette des avoirs."
+          },
+          "nombre_factures": {
+            "type": "integer",
+            "title": "Nombre Factures",
+            "description": "Nombre de factures émises (type ``facture``, hors avoirs)."
+          },
+          "nombre_avoirs": {
+            "type": "integer",
+            "title": "Nombre Avoirs",
+            "description": "Nombre d'avoirs émis sur la période."
+          },
+          "panier_moyen": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Panier Moyen",
+            "description": "``ca_ttc`` divisé par ``nombre_factures`` (0 si aucune facture) : les avoirs pèsent sur le numérateur mais pas sur le dénominateur."
+          }
+        },
+        "type": "object",
+        "required": [
+          "ca_ht",
+          "ca_ttc",
+          "tva_collectee",
+          "nombre_factures",
+          "nombre_avoirs",
+          "panier_moyen"
+        ],
+        "title": "TotauxStatistiques",
+        "description": "Chiffres clés de la période, nets des avoirs."
+      },
       "TypeFacture": {
         "type": "string",
         "enum": [
@@ -5949,6 +8408,171 @@
           "service"
         ],
         "title": "TypeProduit"
+      },
+      "UtilisateurAdminDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom": {
+            "type": "string",
+            "title": "Nom"
+          },
+          "prenom": {
+            "type": "string",
+            "title": "Prenom"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif"
+          },
+          "admin_plateforme": {
+            "type": "boolean",
+            "title": "Admin Plateforme"
+          },
+          "compte_protege": {
+            "type": "boolean",
+            "title": "Compte Protege"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_derniere_connexion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Derniere Connexion"
+          },
+          "entreprises": {
+            "items": {
+              "$ref": "#/components/schemas/RattachementEntrepriseRead"
+            },
+            "type": "array",
+            "title": "Entreprises"
+          },
+          "compteurs": {
+            "$ref": "#/components/schemas/CompteursUtilisateur"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom",
+          "prenom",
+          "email",
+          "est_actif",
+          "admin_plateforme",
+          "compte_protege",
+          "date_creation"
+        ],
+        "title": "UtilisateurAdminDetail",
+        "description": "Détail d'un utilisateur, avec la volumétrie des données qu'il a créées."
+      },
+      "UtilisateurAdminListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nom": {
+            "type": "string",
+            "title": "Nom"
+          },
+          "prenom": {
+            "type": "string",
+            "title": "Prenom"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "telephone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telephone"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif"
+          },
+          "admin_plateforme": {
+            "type": "boolean",
+            "title": "Admin Plateforme"
+          },
+          "compte_protege": {
+            "type": "boolean",
+            "title": "Compte Protege"
+          },
+          "date_creation": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date Creation"
+          },
+          "date_derniere_connexion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Derniere Connexion"
+          },
+          "entreprises": {
+            "items": {
+              "$ref": "#/components/schemas/RattachementEntrepriseRead"
+            },
+            "type": "array",
+            "title": "Entreprises"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nom",
+          "prenom",
+          "email",
+          "est_actif",
+          "admin_plateforme",
+          "compte_protege",
+          "date_creation"
+        ],
+        "title": "UtilisateurAdminListItem",
+        "description": "Ligne de la liste des utilisateurs (vue administrateur de plateforme)."
       },
       "UtilisateurCreate": {
         "properties": {

@@ -6,6 +6,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from src.abonnements.router import router as abonnement_router
+from src.administration.router import router as administration_router
 from src.auth.router import router as auth_router
 from src.catalogue_produits.router import router as catalogue_produits_router
 from src.clients.router import router as clients_router
@@ -69,6 +70,10 @@ def get_application() -> FastAPI:
     _app.include_router(factures_router)
     _app.include_router(documents_router)
     _app.include_router(entreprises_router)
+    # Enregistré en dernier : les chemins du contrat OpenAPI suivent l'ordre
+    # d'inclusion, et ajouter ce module en fin de liste garde les entrées
+    # existantes à leur place (diff de `contracts/openapi.json` purement additif).
+    _app.include_router(administration_router)
 
     return _app
 

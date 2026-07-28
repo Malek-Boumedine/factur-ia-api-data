@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -15,6 +16,7 @@ from src.factures.exceptions import (
     FacturationError,
     FactureIncompleteError,
     FactureNotFoundError,
+    NumerotationConcurrenceError,
     StatutNonConfigureError,
     TauxTvaIntrouvableError,
     TransitionStatutInvalideError,
@@ -302,6 +304,27 @@ async def delete_facture_brouillon(
     await session.commit()
 
 
+# Nombre maximal de tentatives d'attribution du numéro définitif : chaque
+# échec signifie qu'une validation concurrente a abouti entre-temps, la
+# fenêtre de collision est donc minuscule et 3 essais suffisent largement.
+MAX_TENTATIVES_NUMEROTATION = 3
+
+
+def _is_collision_numero(exc: IntegrityError) -> bool:
+    """
+    Détecte une collision sur la contrainte ``unique_entreprise_numero_facture``.
+
+    MySQL (prod, erreur 1062) cite le nom de la contrainte dans son message ;
+    SQLite (tests) cite les colonnes concernées. Toute autre erreur
+    d'intégrité (FK cassée, autre contrainte) n'est PAS une collision de
+    numérotation : la retenter masquerait un vrai bug.
+    """
+    message = str(exc.orig)
+    return "unique_entreprise_numero_facture" in message or (
+        "UNIQUE constraint failed" in message and "facture.numero_facture" in message
+    )
+
+
 async def valider_facture_brouillon(
     session: AsyncSession,
     facture_id: int,
@@ -309,6 +332,42 @@ async def valider_facture_brouillon(
 ) -> Facture:
     """
     Valide un brouillon : fige les données (snapshot) et génère le numéro définitif.
+
+    Le numéro est calculé par « max existant + 1 » sans verrou : deux
+    validations simultanées de la même entreprise peuvent calculer le même
+    numéro, et le perdant subit une collision d'unicité au commit. Dans ce
+    cas on rejoue la validation entière (relecture en base dans une nouvelle
+    transaction, numéro recalculé) — la tentative annulée n'a rien commité,
+    la séquence reste donc continue, sans trou ni doublon.
+    """
+    for tentative in range(MAX_TENTATIVES_NUMEROTATION):
+        try:
+            return await _valider_facture_tentative(session, facture_id, id_entreprise)
+        except IntegrityError as exc:
+            # La transaction est invalidée : rollback obligatoire avant
+            # toute décision (retenter comme relever exigent une session saine).
+            await session.rollback()
+            if not _is_collision_numero(exc):
+                raise
+            if tentative == MAX_TENTATIVES_NUMEROTATION - 1:
+                raise NumerotationConcurrenceError(
+                    "Conflit de numérotation : plusieurs validations "
+                    "simultanées pour cette entreprise. Veuillez réessayer."
+                ) from exc
+    raise AssertionError("inatteignable : la boucle retourne ou lève toujours")
+
+
+async def _valider_facture_tentative(
+    session: AsyncSession,
+    facture_id: int,
+    id_entreprise: int,
+) -> Facture:
+    """
+    Une tentative de validation : garde-fous, numéro, snapshots, commit.
+
+    Idempotente tant que le commit n'a pas abouti (lectures + mutations
+    transactionnelles, aucun effet de bord externe) : rejouable telle quelle
+    après rollback en cas de collision de numérotation.
     """
     # 1. Récupérer la facture avec son statut
     statement_facture = (

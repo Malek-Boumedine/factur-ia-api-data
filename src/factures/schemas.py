@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.documents.schemas import ExtractionOcrRead
 from src.factures.models import Facture, TypeFacture
 
 
@@ -202,14 +203,22 @@ class FactureListItem(FactureRead):
         description="Raison sociale du destinataire : snapshot figé pour une "
         "facture validée, sinon client lié (brouillon)",
     )
+    libelle_statut: str | None = Field(
+        default=None,
+        description="Libellé du statut tel que stocké dans le référentiel "
+        "(ex: brouillon, validée, payee, en_retard) ; clé à mapper côté front "
+        "pour l'affichage du badge. Null si le référentiel est incohérent.",
+    )
 
     @classmethod
     def from_facture(cls, facture: Facture) -> "FactureListItem":
-        """Construit l'élément de liste en résolvant le nom du destinataire.
+        """Construit l'élément de liste en résolvant le nom du destinataire
+        et le libellé du statut.
 
         Le snapshot (données figées à la validation) est prioritaire ; à
         défaut, on lit la raison sociale du client lié (cas des brouillons).
-        La relation ``facture.client`` doit avoir été chargée en eager.
+        Les relations ``facture.client`` et ``facture.statut_ref`` doivent
+        avoir été chargées en eager.
         """
         snapshot = facture.snapshot_client or {}
         nom: str | None = snapshot.get("raison_sociale")
@@ -217,7 +226,142 @@ class FactureListItem(FactureRead):
             nom = facture.client.raison_sociale
         item = cls.model_validate(facture)
         item.nom_destinataire = nom
+        # Référentiel incohérent (statut orphelin) : null plutôt qu'un 500.
+        statut_ref = facture.statut_ref
+        item.libelle_statut = statut_ref.libelle if statut_ref is not None else None
         return item
+
+
+class PeriodeStatistiques(BaseModel):
+    """Période effectivement agrégée (bornes incluses)."""
+
+    date_min: date = Field(description="Borne basse incluse sur la date d'émission.")
+    date_max: date = Field(description="Borne haute incluse sur la date d'émission.")
+
+
+class TotauxStatistiques(BaseModel):
+    """Chiffres clés de la période, nets des avoirs."""
+
+    ca_ht: Decimal = Field(description="Chiffre d'affaires HT net des avoirs.")
+    ca_ttc: Decimal = Field(description="Chiffre d'affaires TTC net des avoirs.")
+    tva_collectee: Decimal = Field(description="TVA collectée nette des avoirs.")
+    nombre_factures: int = Field(
+        description="Nombre de factures émises (type ``facture``, hors avoirs)."
+    )
+    nombre_avoirs: int = Field(description="Nombre d'avoirs émis sur la période.")
+    panier_moyen: Decimal = Field(
+        description="``ca_ttc`` divisé par ``nombre_factures`` (0 si aucune facture) : "
+        "les avoirs pèsent sur le numérateur mais pas sur le dénominateur."
+    )
+
+
+class StatistiquesParStatut(BaseModel):
+    """Répartition d'un statut du référentiel."""
+
+    statut: str = Field(
+        description="Libellé du statut tel que stocké dans le référentiel "
+        "(ex: validée, payee, en_retard) ; clé à mapper côté front."
+    )
+    nombre: int = Field(description="Nombre de documents portant ce statut.")
+    montant_ttc: Decimal = Field(description="Montant TTC cumulé, avoirs soustraits.")
+
+
+class StatistiquesParMois(BaseModel):
+    """Point mensuel de la courbe d'évolution."""
+
+    mois: str = Field(description="Mois au format ``YYYY-MM``.")
+    ca_ht: Decimal = Field(description="Chiffre d'affaires HT du mois, net des avoirs.")
+    ca_ttc: Decimal = Field(
+        description="Chiffre d'affaires TTC du mois, net des avoirs."
+    )
+    nombre: int = Field(description="Nombre de documents émis dans le mois.")
+
+
+class StatistiquesParClient(BaseModel):
+    """Contribution d'un client au chiffre d'affaires."""
+
+    id_client: int | None = Field(
+        default=None, description="Null pour les factures sans client rattaché."
+    )
+    nom_client: str | None = Field(
+        default=None,
+        description="Raison sociale **actuelle** du client (fiche client, pas le "
+        "snapshot figé de la facture) : le regroupement se fait par identité "
+        "client, pour qu'un client renommé n'apparaisse pas deux fois. Null si "
+        "aucun client n'est rattaché.",
+    )
+    ca_ttc: Decimal = Field(description="Montant TTC cumulé, avoirs soustraits.")
+    nombre: int = Field(description="Nombre de documents émis pour ce client.")
+
+
+class IndicateursPaiement(BaseModel):
+    """Encours client. ``montant_en_retard`` est un sous-ensemble de
+    ``restant_a_encaisser`` : ne jamais additionner les deux."""
+
+    montant_en_retard: Decimal = Field(
+        description="Montant TTC des factures dont la date d'échéance est dépassée "
+        "et qui ne sont ni payées ni annulées. Calculé sur ``date_echeance``, pas "
+        "sur le statut ``en_retard``."
+    )
+    restant_a_encaisser: Decimal = Field(
+        description="Montant TTC des factures émises encore dues (ni payées, ni "
+        "annulées). Chiffre **pessimiste** : faute de suivi des règlements, une "
+        "facture partiellement payée compte pour son total."
+    )
+
+
+class DeviseExclue(BaseModel):
+    """Devise écartée des totaux monétaires."""
+
+    devise: str = Field(description="Code devise ISO 4217 (ex: USD).")
+    nombre: int = Field(description="Nombre de documents émis dans cette devise.")
+
+
+class TotauxBrouillons(BaseModel):
+    """Brouillons de la période, comptés à part du chiffre d'affaires."""
+
+    nombre: int = Field(description="Nombre de brouillons.")
+    montant_ttc: Decimal = Field(
+        description="Montant TTC cumulé des brouillons, avoirs soustraits."
+    )
+
+
+class StatistiquesFactures(BaseModel):
+    """
+    Agrégations de facturation calculées en base sur une période et une devise.
+
+    Périmètre : uniquement les documents **émis** (famille non-brouillon) de
+    l'entreprise active, dans la devise demandée. Les avoirs sont soustraits
+    de tous les montants, quel que soit le signe de leur stockage. Une facture
+    annulée reste comptée positivement : elle se neutralise avec son avoir.
+    """
+
+    periode: PeriodeStatistiques
+    devise: str = Field(
+        description="Devise des montants agrégés. Les documents libellés dans une "
+        "autre devise sont exclus et signalés dans ``devises_exclues``."
+    )
+    totaux: TotauxStatistiques
+    par_statut: list[StatistiquesParStatut] = Field(
+        default_factory=list, description="Répartition par statut, triée par libellé."
+    )
+    par_mois: list[StatistiquesParMois] = Field(
+        default_factory=list,
+        description="Série mensuelle continue et ordonnée couvrant toute la "
+        "période : les mois sans document sont renvoyés à zéro.",
+    )
+    top_clients: list[StatistiquesParClient] = Field(
+        default_factory=list,
+        description="Clients les plus contributeurs, du CA le plus élevé au plus "
+        "faible.",
+    )
+    paiement: IndicateursPaiement
+    devises_exclues: list[DeviseExclue] = Field(
+        default_factory=list,
+        description="Devises présentes sur la période mais écartées des totaux "
+        "(on n'additionne jamais deux devises).",
+    )
+    brouillons: TotauxBrouillons
 
 
 class FactureReadWithLignes(FactureRead):
@@ -227,3 +371,11 @@ class FactureReadWithLignes(FactureRead):
     """
 
     lignes: list[FactureLigneRead] = Field(default_factory=list)
+
+    extraction: ExtractionOcrRead | None = Field(
+        default=None,
+        description="Métadonnées de l'extraction OCR à l'origine de la facture "
+        "(score global, type de document détecté, scores par champ). Null si la "
+        "facture n'est pas issue d'un OCR ; résolu uniquement sur la route de "
+        "détail (null sur les réponses de création/modification).",
+    )
