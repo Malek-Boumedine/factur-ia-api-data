@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Column, DateTime
+from sqlalchemy import Column, DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -11,6 +11,15 @@ if TYPE_CHECKING:
 
 class Client(SQLModel, table=True):
     __tablename__ = "client"
+    __table_args__ = (
+        # Chaque entreprise a son propre référentiel client : deux entreprises
+        # peuvent facturer le même client (même SIRET / même TVA). L'unicité
+        # ne vaut donc qu'au sein d'une entreprise, comme numero_facture.
+        UniqueConstraint("id_entreprise", "siret", name="unique_entreprise_siret"),
+        UniqueConstraint(
+            "id_entreprise", "numero_tva", name="unique_entreprise_numero_tva"
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
 
@@ -19,9 +28,9 @@ class Client(SQLModel, table=True):
     id_modificateur: int | None = Field(default=None, foreign_key="utilisateur.id")
 
     raison_sociale: str = Field(index=True, max_length=255)
-    siret: str | None = Field(default=None, unique=True, index=True, max_length=14)
+    siret: str | None = Field(default=None, index=True, max_length=14)
 
-    numero_tva: str | None = Field(default=None, unique=True, max_length=20)
+    numero_tva: str | None = Field(default=None, max_length=20)
 
     adresse: str | None = Field(default=None, max_length=255)
     adresse_complement: str | None = Field(default=None, max_length=255)
