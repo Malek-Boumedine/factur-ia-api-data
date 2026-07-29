@@ -20,6 +20,7 @@ import src.utilisateurs.models  # noqa: F401
 from src.abonnements.models import Abonnement
 from src.auth.models import Role
 from src.core.database import async_session_maker
+from src.entreprises.models import RefFormeJuridique
 from src.factures.models import StatutFacture, TauxTva
 from src.notifications.models import TypeNotification
 from src.pdp.models import StatutDeclaration
@@ -66,6 +67,25 @@ TAUX_TVA = [
     {"taux": "5.50", "libelle": "Taux réduit", "est_actif": True},
     {"taux": "10.00", "libelle": "Taux intermédiaire", "est_actif": True},
     {"taux": "20.00", "libelle": "Taux normal", "est_actif": True},
+]
+
+# Formes juridiques courantes des TPE/PME françaises. Le `code` est
+# l'abréviation usuelle stable (clé d'idempotence du seed).
+FORMES_JURIDIQUES = [
+    {"code": "EI", "libelle": "Entreprise individuelle"},
+    {
+        "code": "MICRO",
+        "libelle": "Micro-entreprise",
+        "mention_tva_defaut": "TVA non applicable, art. 293 B du CGI",
+    },
+    {"code": "EURL", "libelle": "Entreprise unipersonnelle à responsabilité limitée"},
+    {"code": "SARL", "libelle": "Société à responsabilité limitée"},
+    {"code": "SASU", "libelle": "Société par actions simplifiée unipersonnelle"},
+    {"code": "SAS", "libelle": "Société par actions simplifiée"},
+    {"code": "SA", "libelle": "Société anonyme"},
+    {"code": "SNC", "libelle": "Société en nom collectif"},
+    {"code": "SCI", "libelle": "Société civile immobilière"},
+    {"code": "ASSO", "libelle": "Association loi 1901"},
 ]
 
 
@@ -230,6 +250,9 @@ async def run_seeds() -> None:
 
         print("🌱 Seeding taux_tva...")
         await _seed_table(session, TauxTva, TAUX_TVA, "libelle")
+
+        print("🌱 Seeding ref_forme_juridique...")
+        await _seed_table(session, RefFormeJuridique, FORMES_JURIDIQUES, "code")
 
         print("🌱 Seeding statut_facture...")
         await _seed_table(session, StatutFacture, STATUTS_FACTURE, "libelle")

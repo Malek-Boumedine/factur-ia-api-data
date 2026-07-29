@@ -15,6 +15,7 @@ from src.core.rate_limit import limiter
 from src.documents.router import router as documents_router
 from src.entreprises.router import router as entreprises_router
 from src.factures.router import router as factures_router
+from src.formes_juridiques.router import router as formes_juridiques_router
 from src.taux_tva.router import router as taux_tva_router
 from src.utilisateurs.plateforme_router import router as admins_plateforme_router
 from src.utilisateurs.router import router as utilisateurs_router
@@ -66,6 +67,7 @@ def get_application() -> FastAPI:
     _app.include_router(utilisateurs_router)
     _app.include_router(admins_plateforme_router)
     _app.include_router(taux_tva_router)
+    _app.include_router(formes_juridiques_router)
     _app.include_router(catalogue_produits_router)
     _app.include_router(factures_router)
     _app.include_router(documents_router)

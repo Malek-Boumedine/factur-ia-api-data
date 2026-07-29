@@ -1790,6 +1790,67 @@
         }
       }
     },
+    "/formes-juridiques/": {
+      "get": {
+        "tags": [
+          "Formes juridiques"
+        ],
+        "summary": "List Formes",
+        "description": "Liste les formes juridiques de la plateforme (référentiel global), triées\npar libellé. Accessible à tout utilisateur authentifié, sans périmètre\nd'entreprise.",
+        "operationId": "list_formes_formes_juridiques__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif (optionnel).",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif (optionnel)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FormeJuridiqueRead"
+                  },
+                  "title": "Response List Formes Formes Juridiques  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/catalogue-produits/": {
       "post": {
         "tags": [
@@ -6997,6 +7058,38 @@
         "type": "object",
         "title": "FactureUpdate",
         "description": "Schéma pour la mise à jour d'un brouillon de facture (sémantique PATCH).\nTous les champs sont optionnels : seuls les champs envoyés sont modifiés,\nun champ omis reste inchangé. Envoyer explicitement ``null`` efface un\nchamp nullable."
+      },
+      "FormeJuridiqueRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Code stable de la forme juridique (ex : SARL)"
+          },
+          "libelle": {
+            "type": "string",
+            "title": "Libelle",
+            "description": "Libellé affiché (ex : Société à responsabilité limitée)"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si la forme est proposée pour de nouvelles saisies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "libelle",
+          "est_actif"
+        ],
+        "title": "FormeJuridiqueRead",
+        "description": "Schéma de lecture d'une forme juridique (donnée de référence globale,\npartagée par toutes les entreprises de la plateforme)."
       },
       "HTTPValidationError": {
         "properties": {
