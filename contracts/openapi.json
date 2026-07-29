@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.8.0"
+    "version": "1.9.0"
   },
   "paths": {
     "/auth/token": {
@@ -7252,6 +7252,18 @@
               }
             ],
             "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance"
           },
           "total_ht": {
             "anyOf": [

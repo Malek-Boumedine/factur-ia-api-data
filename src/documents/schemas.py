@@ -69,6 +69,10 @@ class OcrWebhookPayload(BaseModel):
     siret_destinataire: str | None = None
     numero_facture: str | None = None
     date_emission: date | None = None
+    # Échéance extraite par l'IA : optionnelle (rétrocompatibilité avec une
+    # API IA antérieure qui ne l'envoie pas) et nullable en base. Null =
+    # non extraite, l'utilisateur la saisit ensuite sur le brouillon.
+    date_echeance: date | None = None
     total_ht: Decimal
     total_tva: Decimal
     total_ttc: Decimal
