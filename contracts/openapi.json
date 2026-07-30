@@ -2873,6 +2873,65 @@
         }
       }
     },
+    "/factures/{facture_id}/transmettre-choruspro": {
+      "post": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Transmettre Choruspro",
+        "description": "Transmet la facture à Chorus Pro (environnement de qualification) :\nvérifie la conformité Factur-X (profil MINIMUM), génère le fichier,\nle dépose en base64 via l'API PISTE (double authentification), puis\ntrace le résultat sur la facture (numéro de flux, date, statut\n``deposee_pdp``) avec un événement PDP.\n\nRefus : 503 si l'intégration Chorus Pro n'est pas configurée, 409 pour\nun brouillon, une facture non conforme ou déjà transmise avec succès\n(la re-transmission n'est possible qu'après un échec), 502 si le dépôt\néchoue côté Chorus Pro (le libellé explicatif est remonté et la facture\npasse en ``erreur_transmission``).",
+        "operationId": "transmettre_choruspro_factures__facture_id__transmettre_choruspro_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransmissionChorusPro"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/factures/{facture_id}/valider": {
       "post": {
         "tags": [
@@ -6741,6 +6800,31 @@
             ],
             "title": "Date Modification"
           },
+          "numero_flux_depot_chorus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Flux Depot Chorus",
+            "description": "Identifiant du flux Chorus Pro si la facture a été transmise avec succès, null sinon."
+          },
+          "date_transmission_chorus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Transmission Chorus",
+            "description": "Date du dépôt accepté par Chorus Pro."
+          },
           "nom_destinataire": {
             "anyOf": [
               {
@@ -6987,6 +7071,31 @@
               }
             ],
             "title": "Date Modification"
+          },
+          "numero_flux_depot_chorus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Flux Depot Chorus",
+            "description": "Identifiant du flux Chorus Pro si la facture a été transmise avec succès, null sinon."
+          },
+          "date_transmission_chorus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Transmission Chorus",
+            "description": "Date du dépôt accepté par Chorus Pro."
           },
           "lignes": {
             "items": {
@@ -8663,6 +8772,39 @@
         ],
         "title": "TotauxStatistiques",
         "description": "Chiffres clés de la période, nets des avoirs."
+      },
+      "TransmissionChorusPro": {
+        "properties": {
+          "numero_flux_depot": {
+            "type": "string",
+            "title": "Numero Flux Depot",
+            "description": "Identifiant du flux attribué par Chorus Pro (ex : CPP0011117000000000414554)."
+          },
+          "date_depot": {
+            "type": "string",
+            "title": "Date Depot",
+            "description": "Date de dépôt renvoyée par Chorus Pro (AAAA-MM-JJ)."
+          },
+          "syntaxe_flux": {
+            "type": "string",
+            "title": "Syntaxe Flux",
+            "description": "Syntaxe du flux déposé (IN_DP_E2_CII_FACTURX pour Factur-X)."
+          },
+          "statut": {
+            "type": "string",
+            "title": "Statut",
+            "description": "Libellé du statut de la facture après dépôt (deposee_pdp)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero_flux_depot",
+          "date_depot",
+          "syntaxe_flux",
+          "statut"
+        ],
+        "title": "TransmissionChorusPro",
+        "description": "Résultat du dépôt d'une facture Factur-X sur Chorus Pro.\n\nLe dépôt est asynchrone côté Chorus Pro : ``numero_flux_depot`` identifie\nle flux accepté et permettra de consulter le compte-rendu de traitement."
       },
       "TypeFacture": {
         "type": "string",
