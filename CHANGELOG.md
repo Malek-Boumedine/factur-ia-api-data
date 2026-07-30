@@ -2,6 +2,26 @@
 
 <!-- version list -->
 
+## v1.10.0 (2026-07-30)
+
+### Features
+
+- **choruspro**: Transmission des factures Factur-X à Chorus Pro (sandbox)
+  ([`add96dc`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/add96dc38d2278313d0cbf7bdeada3870c7d14b6))
+
+- **documents**: Réception de la date d'échéance extraite par l'OCR
+  ([`f5f6a23`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/f5f6a23e4b9f9060e13a83282b0885a669959a6c))
+
+- **facturx**: Génération du fichier Factur-X pour les factures validées
+  ([`36c774e`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/36c774e42bf89d77f3144cde1a9ef668376aa23b))
+
+- **facturx**: Validation de conformité préalable au profil MINIMUM
+  ([`476d18d`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/476d18df215c90f66c928cd6ebc90b0c4e20ba91))
+
+- **formes-juridiques**: Exposition du référentiel des formes juridiques
+  ([`97902bd`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/97902bdfb575bbf26c44a5ae51175c7659fcf84c))
+
+
 ## v1.9.0 (2026-07-28)
 
 ### Bug Fixes
