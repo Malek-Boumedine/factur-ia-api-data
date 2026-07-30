@@ -2759,6 +2759,61 @@
         }
       }
     },
+    "/factures/{facture_id}/facturx": {
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Download Facturx",
+        "description": "Génère et télécharge le fichier Factur-X (PDF/A-3 + XML CII, profil\nMINIMUM) d'une facture validée. Génération idempotente : rien n'est\nstocké, le fichier est reconstruit à chaque appel depuis les données\nfigées à la validation (snapshots SIRET et client).\n\nRefusé (409) pour un brouillon — le Factur-X n'existe que pour une\nfacture émise ; toute facture de la famille validée (validée, payée,\ndéposée PDP…) reste téléchargeable. Refusé (409) également si une\ndonnée obligatoire du XML manque (ex : SIRET émetteur absent).",
+        "operationId": "download_facturx_factures__facture_id__facturx_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fichier Factur-X : PDF/A-3 avec XML CII embarqué (profil MINIMUM), en téléchargement.",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/factures/{facture_id}/valider": {
       "post": {
         "tags": [
