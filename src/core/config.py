@@ -33,6 +33,19 @@ class Settings(BaseSettings):
     # API IA D'EXTRACTION (OCR)
     IA_API_BASE_URL: str
 
+    # CHORUS PRO (via PISTE) — environnement de QUALIFICATION (sandbox).
+    # Optionnels : si les credentials sont absents, l'application démarre
+    # normalement et la route de transmission répond 503. Le passage en
+    # production se fait uniquement par l'environnement : surcharger les
+    # deux URLs (oauth.piste.gouv.fr / api.piste.gouv.fr) et les 4
+    # credentials de production, aucun changement de code.
+    CHORUS_PISTE_CLIENT_ID: str | None = None
+    CHORUS_PISTE_CLIENT_SECRET: str | None = None
+    CHORUS_TECH_LOGIN: str | None = None
+    CHORUS_TECH_PASSWORD: str | None = None
+    CHORUS_OAUTH_URL: str = "https://sandbox-oauth.piste.gouv.fr/api/oauth/token"
+    CHORUS_BASE_URL: str = "https://sandbox-api.piste.gouv.fr"
+
     # RÉINITIALISATION DE MOT DE PASSE
     # Valeurs par défaut fournies pour ne pas bloquer le démarrage ;
     # à surcharger via l'environnement en production.
