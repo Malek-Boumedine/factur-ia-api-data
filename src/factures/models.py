@@ -94,6 +94,12 @@ class Facture(SQLModel, table=True):
     total_tva: Decimal = Field(max_digits=12, decimal_places=2)
     total_ttc: Decimal = Field(max_digits=12, decimal_places=2)
 
+    # Transmission Chorus Pro : métadonnées de dépôt, renseignées après un
+    # dépôt accepté. Hors périmètre des données figées à la validation :
+    # l'inaltérabilité comptable de la facture n'est pas affectée.
+    numero_flux_depot_chorus: str | None = Field(default=None, max_length=50)
+    date_transmission_chorus: datetime | None = Field(default=None)
+
     mode_paiement: str | None = Field(default=None, max_length=50)
     iban: str | None = Field(default=None, max_length=34)
     reference_commande: str | None = Field(default=None, max_length=100)

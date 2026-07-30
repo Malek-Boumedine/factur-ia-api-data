@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.8.0"
+    "version": "1.9.0"
   },
   "paths": {
     "/auth/token": {
@@ -1790,6 +1790,67 @@
         }
       }
     },
+    "/formes-juridiques/": {
+      "get": {
+        "tags": [
+          "Formes juridiques"
+        ],
+        "summary": "List Formes",
+        "description": "Liste les formes juridiques de la plateforme (référentiel global), triées\npar libellé. Accessible à tout utilisateur authentifié, sans périmètre\nd'entreprise.",
+        "operationId": "list_formes_formes_juridiques__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "est_actif",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtre sur le statut actif/inactif (optionnel).",
+              "title": "Est Actif"
+            },
+            "description": "Filtre sur le statut actif/inactif (optionnel)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FormeJuridiqueRead"
+                  },
+                  "title": "Response List Formes Formes Juridiques  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/catalogue-produits/": {
       "post": {
         "tags": [
@@ -2684,6 +2745,179 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/factures/{facture_id}/facturx": {
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Download Facturx",
+        "description": "Génère et télécharge le fichier Factur-X (PDF/A-3 + XML CII, profil\nMINIMUM) d'une facture validée. Génération idempotente : rien n'est\nstocké, le fichier est reconstruit à chaque appel depuis les données\nfigées à la validation (snapshots SIRET et client).\n\nRefusé (409) pour un brouillon — le Factur-X n'existe que pour une\nfacture émise ; toute facture de la famille validée (validée, payée,\ndéposée PDP…) reste téléchargeable. Refusé (409) également si une\ndonnée obligatoire du XML manque (ex : SIRET émetteur absent).",
+        "operationId": "download_facturx_factures__facture_id__facturx_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fichier Factur-X : PDF/A-3 avec XML CII embarqué (profil MINIMUM), en téléchargement.",
+            "content": {
+              "application/pdf": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/factures/{facture_id}/facturx/conformite": {
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Facturx Conformity Report",
+        "description": "Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,\nsans générer le fichier : présence des données obligatoires, cohérence\ndes totaux, validité des SIRET. Les erreurs bloquent la transmission\n(la génération refuserait avec les mêmes règles) ; les avertissements\nsont informatifs. Filet de sécurité avant dépôt sur la PDP.\n\nRefusé (409) pour un brouillon — comme la génération, le rapport n'a de\nsens que sur des données figées à la validation.",
+        "operationId": "facturx_conformity_report_factures__facture_id__facturx_conformite_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RapportConformiteFacturX"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/factures/{facture_id}/transmettre-choruspro": {
+      "post": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Transmettre Choruspro",
+        "description": "Transmet la facture à Chorus Pro (environnement de qualification) :\nvérifie la conformité Factur-X (profil MINIMUM), génère le fichier,\nle dépose en base64 via l'API PISTE (double authentification), puis\ntrace le résultat sur la facture (numéro de flux, date, statut\n``deposee_pdp``) avec un événement PDP.\n\nRefus : 503 si l'intégration Chorus Pro n'est pas configurée, 409 pour\nun brouillon, une facture non conforme ou déjà transmise avec succès\n(la re-transmission n'est possible qu'après un échec), 502 si le dépôt\néchoue côté Chorus Pro (le libellé explicatif est remonté et la facture\npasse en ``erreur_transmission``).",
+        "operationId": "transmettre_choruspro_factures__facture_id__transmettre_choruspro_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransmissionChorusPro"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6566,6 +6800,31 @@
             ],
             "title": "Date Modification"
           },
+          "numero_flux_depot_chorus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Flux Depot Chorus",
+            "description": "Identifiant du flux Chorus Pro si la facture a été transmise avec succès, null sinon."
+          },
+          "date_transmission_chorus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Transmission Chorus",
+            "description": "Date du dépôt accepté par Chorus Pro."
+          },
           "nom_destinataire": {
             "anyOf": [
               {
@@ -6813,6 +7072,31 @@
             ],
             "title": "Date Modification"
           },
+          "numero_flux_depot_chorus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Flux Depot Chorus",
+            "description": "Identifiant du flux Chorus Pro si la facture a été transmise avec succès, null sinon."
+          },
+          "date_transmission_chorus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Transmission Chorus",
+            "description": "Date du dépôt accepté par Chorus Pro."
+          },
           "lignes": {
             "items": {
               "$ref": "#/components/schemas/FactureLigneRead"
@@ -6997,6 +7281,38 @@
         "type": "object",
         "title": "FactureUpdate",
         "description": "Schéma pour la mise à jour d'un brouillon de facture (sémantique PATCH).\nTous les champs sont optionnels : seuls les champs envoyés sont modifiés,\nun champ omis reste inchangé. Envoyer explicitement ``null`` efface un\nchamp nullable."
+      },
+      "FormeJuridiqueRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Code stable de la forme juridique (ex : SARL)"
+          },
+          "libelle": {
+            "type": "string",
+            "title": "Libelle",
+            "description": "Libellé affiché (ex : Société à responsabilité limitée)"
+          },
+          "est_actif": {
+            "type": "boolean",
+            "title": "Est Actif",
+            "description": "Indique si la forme est proposée pour de nouvelles saisies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "libelle",
+          "est_actif"
+        ],
+        "title": "FormeJuridiqueRead",
+        "description": "Schéma de lecture d'une forme juridique (donnée de référence globale,\npartagée par toutes les entreprises de la plateforme)."
       },
       "HTTPValidationError": {
         "properties": {
@@ -7252,6 +7568,18 @@
               }
             ],
             "title": "Date Emission"
+          },
+          "date_echeance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Echeance"
           },
           "total_ht": {
             "anyOf": [
@@ -7567,6 +7895,30 @@
         "title": "PeriodeStatistiques",
         "description": "Période effectivement agrégée (bornes incluses)."
       },
+      "ProblemeConformiteFacturX": {
+        "properties": {
+          "champ": {
+            "type": "string",
+            "title": "Champ"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "champ",
+          "code",
+          "message"
+        ],
+        "title": "ProblemeConformiteFacturX",
+        "description": "Un problème de conformité détecté sur la facture."
+      },
       "ProfilUpdate": {
         "properties": {
           "nom": {
@@ -7652,6 +8004,36 @@
         "type": "object",
         "title": "ProfilUpdate",
         "description": "Mise à jour partielle du profil par l'utilisateur lui-même (self-update).\n\nVolontairement restreint : ni `email` (modifiable uniquement via l'endpoint\ndédié sécurisé `POST /utilisateurs/me/changer-email`, qui exige le mot de\npasse actuel) ni `est_actif` (un utilisateur ne peut pas se désactiver\nlui-même). Ces deux champs restent réservés à la voie admin\n(`UtilisateurTeamUpdate`)."
+      },
+      "RapportConformiteFacturX": {
+        "properties": {
+          "conforme": {
+            "type": "boolean",
+            "title": "Conforme"
+          },
+          "erreurs": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemeConformiteFacturX"
+            },
+            "type": "array",
+            "title": "Erreurs"
+          },
+          "avertissements": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemeConformiteFacturX"
+            },
+            "type": "array",
+            "title": "Avertissements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conforme",
+          "erreurs",
+          "avertissements"
+        ],
+        "title": "RapportConformiteFacturX",
+        "description": "Rapport de conformité au profil MINIMUM, sans génération de fichier.\n\n``conforme`` est vrai si aucune erreur bloquante n'est détectée ; les\navertissements sont informatifs et n'empêchent pas la transmission."
       },
       "RattachementEntrepriseRead": {
         "properties": {
@@ -8390,6 +8772,39 @@
         ],
         "title": "TotauxStatistiques",
         "description": "Chiffres clés de la période, nets des avoirs."
+      },
+      "TransmissionChorusPro": {
+        "properties": {
+          "numero_flux_depot": {
+            "type": "string",
+            "title": "Numero Flux Depot",
+            "description": "Identifiant du flux attribué par Chorus Pro (ex : CPP0011117000000000414554)."
+          },
+          "date_depot": {
+            "type": "string",
+            "title": "Date Depot",
+            "description": "Date de dépôt renvoyée par Chorus Pro (AAAA-MM-JJ)."
+          },
+          "syntaxe_flux": {
+            "type": "string",
+            "title": "Syntaxe Flux",
+            "description": "Syntaxe du flux déposé (IN_DP_E2_CII_FACTURX pour Factur-X)."
+          },
+          "statut": {
+            "type": "string",
+            "title": "Statut",
+            "description": "Libellé du statut de la facture après dépôt (deposee_pdp)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "numero_flux_depot",
+          "date_depot",
+          "syntaxe_flux",
+          "statut"
+        ],
+        "title": "TransmissionChorusPro",
+        "description": "Résultat du dépôt d'une facture Factur-X sur Chorus Pro.\n\nLe dépôt est asynchrone côté Chorus Pro : ``numero_flux_depot`` identifie\nle flux accepté et permettra de consulter le compte-rendu de traitement."
       },
       "TypeFacture": {
         "type": "string",

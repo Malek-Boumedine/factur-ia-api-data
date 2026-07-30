@@ -188,6 +188,16 @@ class FactureRead(FactureBase):
     date_creation: datetime
     date_modification: datetime | None = None
 
+    # Transmission Chorus Pro
+    numero_flux_depot_chorus: str | None = Field(
+        default=None,
+        description="Identifiant du flux Chorus Pro si la facture a été "
+        "transmise avec succès, null sinon.",
+    )
+    date_transmission_chorus: datetime | None = Field(
+        default=None, description="Date du dépôt accepté par Chorus Pro."
+    )
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -378,4 +388,26 @@ class FactureReadWithLignes(FactureRead):
         "(score global, type de document détecté, scores par champ). Null si la "
         "facture n'est pas issue d'un OCR ; résolu uniquement sur la route de "
         "détail (null sur les réponses de création/modification).",
+    )
+
+
+class TransmissionChorusPro(BaseModel):
+    """Résultat du dépôt d'une facture Factur-X sur Chorus Pro.
+
+    Le dépôt est asynchrone côté Chorus Pro : ``numero_flux_depot`` identifie
+    le flux accepté et permettra de consulter le compte-rendu de traitement.
+    """
+
+    numero_flux_depot: str = Field(
+        description="Identifiant du flux attribué par Chorus Pro "
+        "(ex : CPP0011117000000000414554)."
+    )
+    date_depot: str = Field(
+        description="Date de dépôt renvoyée par Chorus Pro (AAAA-MM-JJ)."
+    )
+    syntaxe_flux: str = Field(
+        description="Syntaxe du flux déposé (IN_DP_E2_CII_FACTURX pour Factur-X)."
+    )
+    statut: str = Field(
+        description="Libellé du statut de la facture après dépôt (deposee_pdp)."
     )

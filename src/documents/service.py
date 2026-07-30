@@ -142,6 +142,9 @@ async def _payload_vers_facture_create(
     return FactureCreate(
         id_document=document.id,
         date_emission=payload.date_emission or date.today(),
+        # Pas de valeur par défaut ici, contrairement à l'émission : la colonne
+        # est nullable, mieux vaut une échéance absente qu'une date inventée.
+        date_echeance=payload.date_echeance,
         siret_emetteur=payload.siret_emetteur,
         siret_destinataire=payload.siret_destinataire,
         iban=payload.iban,

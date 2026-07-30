@@ -1,17 +1,19 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import selectinload
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.clients.models import Client
+from src.core.config import settings
 from src.core.database import get_session
 from src.core.pagination import Page, PaginationParams, apply_search, paginate
 from src.documents.models import ExtractionOcr
 from src.documents.schemas import ExtractionOcrRead
+from src.entreprises.models import Entreprise
 from src.factures.exceptions import (
     FacturationError,
     FactureIncompleteError,
@@ -22,13 +24,14 @@ from src.factures.exceptions import (
     TransitionStatutInvalideError,
     TypeFactureNonModifiableError,
 )
-from src.factures.models import Facture, StatutFacture, TypeFacture
+from src.factures.models import Facture, FactureLigne, StatutFacture, TypeFacture
 from src.factures.schemas import (
     FactureCreate,
     FactureListItem,
     FactureReadWithLignes,
     FactureUpdate,
     StatistiquesFactures,
+    TransmissionChorusPro,
 )
 from src.factures.service import (
     create_facture_brouillon,
@@ -44,6 +47,13 @@ from src.factures.statistiques import (
     calculer_statistiques,
     resoudre_periode,
 )
+from src.facturx.conformite import check_facturx_minimum
+from src.facturx.exceptions import DonneesFacturXManquantesError
+from src.facturx.schemas import RapportConformiteFacturX
+from src.facturx.service import facturx_filename, generate_facturx
+from src.integrations.chorus_pro.client import ChorusProClient, is_chorus_configured
+from src.integrations.chorus_pro.exceptions import ChorusProDepotError, ChorusProError
+from src.pdp.models import EvenementPdp
 from src.utilisateurs.models import Utilisateur
 
 router = APIRouter(prefix="/factures", tags=["Gestion des Factures"])
@@ -53,6 +63,14 @@ CurrentUserDep = Annotated[Utilisateur, Depends(get_current_user)]
 
 # dépendance de sécurité multi-tenant.
 TenantDep = Annotated[int, Depends(verify_tenant_access)]
+
+
+def get_chorus_client() -> ChorusProClient:
+    """Fournit le client Chorus Pro (surchargeable dans les tests)."""
+    return ChorusProClient()
+
+
+ChorusClientDep = Annotated[ChorusProClient, Depends(get_chorus_client)]
 
 
 @router.post(
@@ -316,6 +334,303 @@ async def get_facture(
         facture_read.extraction = ExtractionOcrRead.model_validate(extraction)
 
     return facture_read
+
+
+@router.get(
+    "/{facture_id}/facturx",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {"application/pdf": {}},
+            "description": "Fichier Factur-X : PDF/A-3 avec XML CII embarqué "
+            "(profil MINIMUM), en téléchargement.",
+        }
+    },
+)
+async def download_facturx(
+    facture_id: int,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+) -> Response:
+    """
+    Génère et télécharge le fichier Factur-X (PDF/A-3 + XML CII, profil
+    MINIMUM) d'une facture validée. Génération idempotente : rien n'est
+    stocké, le fichier est reconstruit à chaque appel depuis les données
+    figées à la validation (snapshots SIRET et client).
+
+    Refusé (409) pour un brouillon — le Factur-X n'existe que pour une
+    facture émise ; toute facture de la famille validée (validée, payée,
+    déposée PDP…) reste téléchargeable. Refusé (409) également si une
+    donnée obligatoire du XML manque (ex : SIRET émetteur absent).
+    """
+    statement = (
+        select(Facture)
+        .where(Facture.id == facture_id, Facture.id_entreprise == id_entreprise)
+        .options(
+            selectinload(Facture.lignes).selectinload(  # type: ignore
+                FactureLigne.taux_tva_ref  # type: ignore
+            ),
+            selectinload(Facture.statut_ref),  # type: ignore
+        )
+    )
+    result = await session.exec(statement)
+    db_facture = result.first()
+
+    if not db_facture:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Facture introuvable dans cet espace entreprise",
+        )
+
+    statut = db_facture.statut_ref
+    if statut is None or statut.libelle.strip().lower() == "brouillon":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le fichier Factur-X n'est disponible que pour une facture "
+            "validée. Validez d'abord ce brouillon.",
+        )
+
+    db_entreprise = await session.get(Entreprise, id_entreprise)
+    if db_entreprise is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Entreprise émettrice introuvable.",
+        )
+
+    try:
+        pdf_bytes = generate_facturx(db_facture, db_entreprise)
+    except DonneesFacturXManquantesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{facturx_filename(db_facture)}"'
+            )
+        },
+    )
+
+
+@router.get(
+    "/{facture_id}/facturx/conformite",
+    response_model=RapportConformiteFacturX,
+)
+async def facturx_conformity_report(
+    facture_id: int,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+) -> Any:
+    """
+    Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,
+    sans générer le fichier : présence des données obligatoires, cohérence
+    des totaux, validité des SIRET. Les erreurs bloquent la transmission
+    (la génération refuserait avec les mêmes règles) ; les avertissements
+    sont informatifs. Filet de sécurité avant dépôt sur la PDP.
+
+    Refusé (409) pour un brouillon — comme la génération, le rapport n'a de
+    sens que sur des données figées à la validation.
+    """
+    statement = (
+        select(Facture)
+        .where(Facture.id == facture_id, Facture.id_entreprise == id_entreprise)
+        .options(selectinload(Facture.statut_ref))  # type: ignore
+    )
+    result = await session.exec(statement)
+    db_facture = result.first()
+
+    if not db_facture:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Facture introuvable dans cet espace entreprise",
+        )
+
+    statut = db_facture.statut_ref
+    if statut is None or statut.libelle.strip().lower() == "brouillon":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le rapport de conformité Factur-X n'est disponible que "
+            "pour une facture validée. Validez d'abord ce brouillon.",
+        )
+
+    db_entreprise = await session.get(Entreprise, id_entreprise)
+    if db_entreprise is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Entreprise émettrice introuvable.",
+        )
+
+    return check_facturx_minimum(db_facture, db_entreprise)
+
+
+@router.post(
+    "/{facture_id}/transmettre-choruspro",
+    response_model=TransmissionChorusPro,
+)
+async def transmettre_choruspro(
+    facture_id: int,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+    chorus_client: ChorusClientDep,
+) -> Any:
+    """
+    Transmet la facture à Chorus Pro (environnement de qualification) :
+    vérifie la conformité Factur-X (profil MINIMUM), génère le fichier,
+    le dépose en base64 via l'API PISTE (double authentification), puis
+    trace le résultat sur la facture (numéro de flux, date, statut
+    ``deposee_pdp``) avec un événement PDP.
+
+    Refus : 503 si l'intégration Chorus Pro n'est pas configurée, 409 pour
+    un brouillon, une facture non conforme ou déjà transmise avec succès
+    (la re-transmission n'est possible qu'après un échec), 502 si le dépôt
+    échoue côté Chorus Pro (le libellé explicatif est remonté et la facture
+    passe en ``erreur_transmission``).
+    """
+    if not is_chorus_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="L'intégration Chorus Pro n'est pas configurée sur ce serveur.",
+        )
+
+    statement = (
+        select(Facture)
+        .where(Facture.id == facture_id, Facture.id_entreprise == id_entreprise)
+        .options(
+            selectinload(Facture.lignes).selectinload(  # type: ignore
+                FactureLigne.taux_tva_ref  # type: ignore
+            ),
+            selectinload(Facture.statut_ref),  # type: ignore
+        )
+    )
+    result = await session.exec(statement)
+    db_facture = result.first()
+
+    if not db_facture:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Facture introuvable dans cet espace entreprise",
+        )
+
+    statut = db_facture.statut_ref
+    if statut is None or statut.libelle.strip().lower() == "brouillon":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Seule une facture validée peut être transmise à Chorus Pro. "
+            "Validez d'abord ce brouillon.",
+        )
+
+    # Anti-doublon : le numéro de flux n'est renseigné qu'après un dépôt
+    # accepté — la re-transmission reste donc possible après un échec.
+    if db_facture.numero_flux_depot_chorus:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Facture déjà transmise à Chorus Pro "
+            f"(flux {db_facture.numero_flux_depot_chorus}).",
+        )
+
+    db_entreprise = await session.get(Entreprise, id_entreprise)
+    if db_entreprise is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Entreprise émettrice introuvable.",
+        )
+
+    rapport = check_facturx_minimum(db_facture, db_entreprise)
+    if not rapport.conforme:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Facture non conforme au profil Factur-X MINIMUM : "
+                "transmission refusée.",
+                "erreurs": [erreur.model_dump() for erreur in rapport.erreurs],
+            },
+        )
+
+    # Statuts cibles résolus avant tout appel réseau : un référentiel
+    # incomplet doit échouer avant le dépôt (jamais de dépôt sans trace).
+    result_depose = await session.exec(
+        select(StatutFacture).where(StatutFacture.libelle == "deposee_pdp")
+    )
+    statut_depose = result_depose.first()
+    result_erreur = await session.exec(
+        select(StatutFacture).where(StatutFacture.libelle == "erreur_transmission")
+    )
+    statut_erreur = result_erreur.first()
+    if (
+        statut_depose is None
+        or statut_depose.id is None
+        or statut_erreur is None
+        or statut_erreur.id is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Statuts PDP (deposee_pdp / erreur_transmission) non "
+            "configurés en base.",
+        )
+    id_statut_erreur = statut_erreur.id
+
+    try:
+        pdf_bytes = generate_facturx(db_facture, db_entreprise)
+    except DonneesFacturXManquantesError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
+    source = (
+        "CHORUS_PRO_SANDBOX" if "sandbox" in settings.CHORUS_BASE_URL else "CHORUS_PRO"
+    )
+    statut_avant_id = db_facture.id_statut
+
+    async def record_failure(message: str) -> None:
+        """Trace l'échec du dépôt : statut erreur_transmission + événement."""
+        db_facture.id_statut = id_statut_erreur
+        session.add(
+            EvenementPdp(
+                id_facture=facture_id,
+                id_statut_avant=statut_avant_id,
+                id_statut_apres=id_statut_erreur,
+                source=source,
+                message=message,
+            )
+        )
+        await session.commit()
+
+    try:
+        depot = await chorus_client.deposer_flux_facturx(
+            pdf_bytes, facturx_filename(db_facture)
+        )
+    except ChorusProDepotError as exc:
+        await record_failure(str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Dépôt refusé par Chorus Pro : {exc.libelle} "
+            f"(codeRetour={exc.code_retour}).",
+        ) from exc
+    except ChorusProError as exc:
+        await record_failure(str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
+        ) from exc
+
+    db_facture.id_statut = statut_depose.id
+    db_facture.numero_flux_depot_chorus = depot.numero_flux_depot
+    db_facture.date_transmission_chorus = datetime.now(UTC)
+    session.add(
+        EvenementPdp(
+            id_facture=facture_id,
+            id_statut_avant=statut_avant_id,
+            id_statut_apres=statut_depose.id,
+            source=source,
+            message=f"Flux déposé : {depot.numero_flux_depot}",
+        )
+    )
+    await session.commit()
+
+    return TransmissionChorusPro(
+        numero_flux_depot=depot.numero_flux_depot,
+        date_depot=depot.date_depot,
+        syntaxe_flux=depot.syntaxe_flux,
+        statut=statut_depose.libelle,
+    )
 
 
 @router.patch("/{facture_id}", response_model=FactureReadWithLignes)
