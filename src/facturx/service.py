@@ -25,8 +25,8 @@ def facturx_filename(facture: Facture) -> str:
 def generate_facturx(facture: Facture, entreprise: Entreprise) -> bytes:
     """Génère le fichier Factur-X (PDF/A-3 + XML CII) d'une facture validée.
 
-    Lève ``DonneesFacturXManquantesError`` si une donnée obligatoire du XML
-    est absente (SIRET émetteur, snapshot client).
+    Lève ``DonneesFacturXManquantesError`` si la facture n'est pas conforme
+    au profil MINIMUM (mêmes règles que le rapport de conformité).
     """
     xml_bytes = build_cii_minimum_xml(facture, entreprise)
     pdf_bytes = build_invoice_pdf(facture, entreprise)

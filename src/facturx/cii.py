@@ -15,6 +15,7 @@ from lxml import etree
 
 from src.entreprises.models import Entreprise
 from src.factures.models import Facture, TypeFacture
+from src.facturx.conformite import check_facturx_minimum
 from src.facturx.exceptions import DonneesFacturXManquantesError
 
 NS_RSM = "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
@@ -60,19 +61,19 @@ def build_cii_minimum_xml(facture: Facture, entreprise: Entreprise) -> bytes:
     Les identités des parties proviennent des snapshots figés à la validation
     (SIRET, raison sociale du client) ; seul le nom de l'émetteur est lu sur
     la fiche entreprise courante, faute d'être snapshoté.
+
+    Lève ``DonneesFacturXManquantesError`` si la facture n'est pas conforme
+    au profil MINIMUM (mêmes règles que le rapport de conformité :
+    ``check_facturx_minimum``).
     """
-    manquants: list[str] = []
-    if not facture.siret_emetteur:
-        manquants.append("SIRET de l'émetteur")
+    rapport = check_facturx_minimum(facture, entreprise)
+    if rapport.erreurs:
+        raise DonneesFacturXManquantesError(
+            "Impossible de générer le fichier Factur-X, la facture n'est pas "
+            f"conforme : {' ; '.join(e.message for e in rapport.erreurs)}"
+        )
     snapshot = facture.snapshot_client or {}
     raison_sociale_client = snapshot.get("raison_sociale")
-    if not raison_sociale_client:
-        manquants.append("raison sociale du destinataire (snapshot client)")
-    if manquants:
-        raise DonneesFacturXManquantesError(
-            "Impossible de générer le fichier Factur-X, données obligatoires "
-            f"manquantes : {', '.join(manquants)}."
-        )
 
     root = etree.Element(f"{{{NS_RSM}}}CrossIndustryInvoice", nsmap=NSMAP)
 

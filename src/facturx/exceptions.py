@@ -3,7 +3,8 @@ class FacturXError(Exception):
 
 
 class DonneesFacturXManquantesError(FacturXError):
-    """Une donnée obligatoire du XML CII est absente de la facture.
+    """La facture n'est pas conforme au profil MINIMUM : donnée obligatoire
+    absente ou incohérente (règles de ``conformite.check_facturx_minimum``).
 
     Ne devrait pas arriver sur une facture validée (les snapshots sont
     figés à la validation), mais reste possible si l'entreprise n'avait

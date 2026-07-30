@@ -45,7 +45,9 @@ from src.factures.statistiques import (
     calculer_statistiques,
     resoudre_periode,
 )
+from src.facturx.conformite import check_facturx_minimum
 from src.facturx.exceptions import DonneesFacturXManquantesError
+from src.facturx.schemas import RapportConformiteFacturX
 from src.facturx.service import facturx_filename, generate_facturx
 from src.utilisateurs.models import Utilisateur
 
@@ -396,6 +398,57 @@ async def download_facturx(
             )
         },
     )
+
+
+@router.get(
+    "/{facture_id}/facturx/conformite",
+    response_model=RapportConformiteFacturX,
+)
+async def facturx_conformity_report(
+    facture_id: int,
+    session: SessionDep,
+    id_entreprise: TenantDep,
+) -> Any:
+    """
+    Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,
+    sans générer le fichier : présence des données obligatoires, cohérence
+    des totaux, validité des SIRET. Les erreurs bloquent la transmission
+    (la génération refuserait avec les mêmes règles) ; les avertissements
+    sont informatifs. Filet de sécurité avant dépôt sur la PDP.
+
+    Refusé (409) pour un brouillon — comme la génération, le rapport n'a de
+    sens que sur des données figées à la validation.
+    """
+    statement = (
+        select(Facture)
+        .where(Facture.id == facture_id, Facture.id_entreprise == id_entreprise)
+        .options(selectinload(Facture.statut_ref))  # type: ignore
+    )
+    result = await session.exec(statement)
+    db_facture = result.first()
+
+    if not db_facture:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Facture introuvable dans cet espace entreprise",
+        )
+
+    statut = db_facture.statut_ref
+    if statut is None or statut.libelle.strip().lower() == "brouillon":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Le rapport de conformité Factur-X n'est disponible que "
+            "pour une facture validée. Validez d'abord ce brouillon.",
+        )
+
+    db_entreprise = await session.get(Entreprise, id_entreprise)
+    if db_entreprise is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Entreprise émettrice introuvable.",
+        )
+
+    return check_facturx_minimum(db_facture, db_entreprise)
 
 
 @router.patch("/{facture_id}", response_model=FactureReadWithLignes)

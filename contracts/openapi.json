@@ -2814,6 +2814,65 @@
         }
       }
     },
+    "/factures/{facture_id}/facturx/conformite": {
+      "get": {
+        "tags": [
+          "Gestion des Factures"
+        ],
+        "summary": "Facturx Conformity Report",
+        "description": "Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,\nsans générer le fichier : présence des données obligatoires, cohérence\ndes totaux, validité des SIRET. Les erreurs bloquent la transmission\n(la génération refuserait avec les mêmes règles) ; les avertissements\nsont informatifs. Filet de sécurité avant dépôt sur la PDP.\n\nRefusé (409) pour un brouillon — comme la génération, le rapport n'a de\nsens que sur des données figées à la validation.",
+        "operationId": "facturx_conformity_report_factures__facture_id__facturx_conformite_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "facture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Facture Id"
+            }
+          },
+          {
+            "name": "x-entreprise-id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "ID de l'entreprise",
+              "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+            },
+            "description": "Identifiant de l'entreprise (tenant)                 actif transmis dans les en-têtes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RapportConformiteFacturX"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/factures/{facture_id}/valider": {
       "post": {
         "tags": [
@@ -7727,6 +7786,30 @@
         "title": "PeriodeStatistiques",
         "description": "Période effectivement agrégée (bornes incluses)."
       },
+      "ProblemeConformiteFacturX": {
+        "properties": {
+          "champ": {
+            "type": "string",
+            "title": "Champ"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "champ",
+          "code",
+          "message"
+        ],
+        "title": "ProblemeConformiteFacturX",
+        "description": "Un problème de conformité détecté sur la facture."
+      },
       "ProfilUpdate": {
         "properties": {
           "nom": {
@@ -7812,6 +7895,36 @@
         "type": "object",
         "title": "ProfilUpdate",
         "description": "Mise à jour partielle du profil par l'utilisateur lui-même (self-update).\n\nVolontairement restreint : ni `email` (modifiable uniquement via l'endpoint\ndédié sécurisé `POST /utilisateurs/me/changer-email`, qui exige le mot de\npasse actuel) ni `est_actif` (un utilisateur ne peut pas se désactiver\nlui-même). Ces deux champs restent réservés à la voie admin\n(`UtilisateurTeamUpdate`)."
+      },
+      "RapportConformiteFacturX": {
+        "properties": {
+          "conforme": {
+            "type": "boolean",
+            "title": "Conforme"
+          },
+          "erreurs": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemeConformiteFacturX"
+            },
+            "type": "array",
+            "title": "Erreurs"
+          },
+          "avertissements": {
+            "items": {
+              "$ref": "#/components/schemas/ProblemeConformiteFacturX"
+            },
+            "type": "array",
+            "title": "Avertissements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "conforme",
+          "erreurs",
+          "avertissements"
+        ],
+        "title": "RapportConformiteFacturX",
+        "description": "Rapport de conformité au profil MINIMUM, sans génération de fichier.\n\n``conforme`` est vrai si aucune erreur bloquante n'est détectée ; les\navertissements sont informatifs et n'empêchent pas la transmission."
       },
       "RattachementEntrepriseRead": {
         "properties": {

@@ -68,14 +68,16 @@ class _FakeSession:
         return self._gets.get((model, key))
 
 
+# SIRET factices à clé de Luhn valide : la génération applique les règles de
+# conformité (check_facturx_minimum) et refuserait un SIRET à clé invalide.
 def _entreprise() -> Entreprise:
-    return Entreprise(id=1, nom_entreprise="Ma Boite SAS", siret="12345678900011")
+    return Entreprise(id=1, nom_entreprise="Ma Boite SAS", siret="12345678900015")
 
 
 def _facture_validee(
     statut: str = "validée",
     type_facture: TypeFacture = TypeFacture.FACTURE,
-    siret_emetteur: str | None = "12345678900011",
+    siret_emetteur: str | None = "12345678900015",
 ) -> Facture:
     facture = Facture(
         id=42,
@@ -89,7 +91,7 @@ def _facture_validee(
         type_facture=type_facture,
         id_statut=2,
         siret_emetteur=siret_emetteur,
-        siret_destinataire="98765432100022",
+        siret_destinataire="98765432100023",
         snapshot_client={
             "raison_sociale": "Client Test SARL",
             "adresse": "1 rue de la Paix",
@@ -194,7 +196,7 @@ async def test_telechargement_facturx_round_trip() -> None:
     seller_id = root.findall(
         ".//ram:SellerTradeParty/ram:SpecifiedLegalOrganization/ram:ID", NAMESPACES
     )[0]
-    assert seller_id.text == "12345678900011"
+    assert seller_id.text == "12345678900015"
     assert seller_id.get("schemeID") == "0009"
 
     # Date au format CII 102 (AAAAMMJJ)
@@ -220,7 +222,13 @@ async def test_structure_pdfa3() -> None:
 
 async def test_avoir_type_code_381() -> None:
     """Un avoir produit un TypeCode CII 381 (au lieu de 380)."""
-    response = await _telecharger(_facture_validee(type_facture=TypeFacture.AVOIR))
+    facture = _facture_validee(type_facture=TypeFacture.AVOIR)
+    # Les avoirs sont stockés en montants négatifs (règle de signe vérifiée
+    # par la conformité).
+    facture.total_ht = -facture.total_ht
+    facture.total_tva = -facture.total_tva
+    facture.total_ttc = -facture.total_ttc
+    response = await _telecharger(facture)
     assert response.status_code == 200
 
     _, xml_bytes = get_facturx_xml_from_pdf(io.BytesIO(response.content))
