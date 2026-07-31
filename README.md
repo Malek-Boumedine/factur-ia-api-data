@@ -36,7 +36,10 @@ Pourquoi pas au démarrage : sur Cloud Run, plusieurs instances qui scalent migr
 ### Cloud Run
 
 - **Port** : Cloud Run injecte `PORT` (8080 par défaut), le `CMD` de l'image l'utilise tel quel. Un seul worker uvicorn par conteneur : c'est Cloud Run qui scale horizontalement.
-- **Probes** : pas de `HEALTHCHECK` Docker (Cloud Run l'ignore). Configurer les probes startup/liveness du service sur `GET /health`.
+- **Probes** : pas de `HEALTHCHECK` Docker (Cloud Run l'ignore). Deux endpoints dédiés, publics, hors contrat OpenAPI et hors rate-limiting :
+  - `GET /health` (**liveness**) : « le processus est-il vivant ? » — 200 inconditionnel, aucune I/O, aucune dépendance. Un échec provoque le **redémarrage** du conteneur ; c'est pourquoi cette sonde ne teste jamais la base (une panne MySQL ferait redémarrer toutes les instances en boucle).
+  - `GET /ready` (**readiness**) : « le service peut-il traiter des requêtes ? » — `SELECT 1` sur MySQL avec timeout de 2 s. Répond **503** si la base est indisponible : l'instance est **retirée du trafic** sans être tuée, et se rétablit d'elle-même au retour de la base. Seule la base est testée : l'API IA (OCR) et Chorus Pro ne sont pas critiques (leur indisponibilité dégrade une fonctionnalité, pas le service).
+  - Configuration suggérée : **startup probe** sur `/health` (`periodSeconds: 10`, `failureThreshold: 6`, `timeoutSeconds: 4` — laisse ~60 s de cold start) ; **liveness probe** sur `/health` (`periodSeconds: 30`, `timeoutSeconds: 4`, `failureThreshold: 3`). Cloud Run ne propose pas de readiness probe continue au sens Kubernetes ; `/ready` sert au monitoring (uptime check sur `/ready` = alerte « service hors trafic ») et de readiness si le service est déployé un jour sur GKE/Kubernetes.
 - **Migrations** : créer un **Cloud Run Job** avec la même image et la commande `alembic upgrade head`, à exécuter avant chaque déploiement du service (idem `python -m src.core.seed` pour les référentiels).
 
 ```bash

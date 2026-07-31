@@ -1,9 +1,15 @@
+import asyncio
+import logging
 from importlib.metadata import PackageNotFoundError, version
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.abonnements.router import router as abonnement_router
 from src.administration.router import router as administration_router
@@ -11,6 +17,7 @@ from src.auth.router import router as auth_router
 from src.catalogue_produits.router import router as catalogue_produits_router
 from src.clients.router import router as clients_router
 from src.core.config import settings
+from src.core.database import get_session
 from src.core.rate_limit import limiter
 from src.documents.router import router as documents_router
 from src.entreprises.router import router as entreprises_router
@@ -83,14 +90,50 @@ def get_application() -> FastAPI:
 app = get_application()
 
 
-@app.get("/health", tags=["Infrastructure"])
+logger = logging.getLogger(__name__)
+
+# Délai maximal accordé au SELECT 1 de la sonde de readiness. Au-delà, la base
+# est considérée indisponible : une sonde ne doit jamais pendre.
+READY_DB_TIMEOUT_SECONDS = 2.0
+
+
+@app.get("/health", tags=["Infrastructure"], include_in_schema=False)
 async def health_check() -> dict[str, str]:
-    """Endpoint technique pour vérifier l'état de l'API."""
+    """Sonde de liveness (Cloud Run startup/liveness).
+
+    Répond 200 tant que le processus est vivant : aucune I/O, aucune
+    dépendance externe. Un échec de cette sonde provoque un redémarrage du
+    conteneur — elle ne doit donc jamais dépendre de la base de données.
+    """
     return {
-        "status": "healthy",
+        "status": "ok",
         "app_name": settings.APP_NAME,
-        "environment": settings.ENVIRONNEMENT,
+        "version": get_app_version(),
     }
+
+
+@app.get("/ready", tags=["Infrastructure"], include_in_schema=False)
+async def readiness_check(
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> dict[str, str]:
+    """Sonde de readiness : le service peut-il traiter des requêtes ?
+
+    Vérifie la seule dépendance critique (MySQL) via un SELECT 1 borné dans
+    le temps. Répond 503 si la base est indisponible : l'orchestrateur retire
+    alors le conteneur du trafic sans le redémarrer. Le détail de l'erreur
+    part dans les logs, jamais dans la réponse.
+    """
+    try:
+        await asyncio.wait_for(
+            session.execute(text("SELECT 1")), timeout=READY_DB_TIMEOUT_SECONDS
+        )
+    except (TimeoutError, SQLAlchemyError, OSError) as exc:
+        logger.warning("Sonde de readiness : base indisponible (%s)", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="service non prêt",
+        ) from exc
+    return {"status": "ready"}
 
 
 @app.get("/", tags=["Infrastructure"])
