@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from src.core.siret import validate_siret_flexible
 
 
 class ClientBase(BaseModel):
@@ -31,7 +33,13 @@ class ClientCreate(ClientBase):
     Schéma pour la création d'un nouveau client.
     """
 
-    pass
+    @field_validator("siret", mode="before")
+    @classmethod
+    def normalize_siret(cls, value: object) -> object:
+        """Séparateurs d'affichage retirés (espaces, points, tirets), chiffres
+        uniquement. En mode ``before`` pour nettoyer avant ``max_length=14``.
+        Chaîne vide ou séparateurs seuls = SIRET absent (``None``)."""
+        return validate_siret_flexible(value)
 
 
 class ClientUpdate(BaseModel):
@@ -49,6 +57,12 @@ class ClientUpdate(BaseModel):
     email: EmailStr | None = Field(default=None, max_length=255)
     telephone: str | None = Field(default=None, max_length=20)
     est_actif: bool | None = Field(default=None)
+
+    @field_validator("siret", mode="before")
+    @classmethod
+    def normalize_siret(cls, value: object) -> object:
+        """Même normalisation qu'à la création (voir ``ClientCreate``)."""
+        return validate_siret_flexible(value)
 
 
 class ClientRead(ClientBase):

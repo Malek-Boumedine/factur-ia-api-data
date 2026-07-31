@@ -517,7 +517,7 @@
           "Ecosystème Client"
         ],
         "summary": "Rechercher une entreprise via son SIREN ou SIRET",
-        "description": "Interroge l'API gouvernementale pour\npré-remplir les données d'un client.\nAccepte un SIREN (9 chiffres) ou un SIRET (14 chiffres).",
+        "description": "Interroge l'API gouvernementale pour\npré-remplir les données d'un client.\nAccepte un SIREN (9 chiffres) ou un SIRET (14 chiffres), y compris aux\nformats d'affichage courants (espaces — même insécables —, points,\ntirets) : `340 216 121 33798` est normalisé avant l'appel SIRENE.",
         "operationId": "search_company_by_identifier_clients_recherche_sirene__identifiant__get",
         "parameters": [
           {
@@ -2646,7 +2646,7 @@
           "Gestion des Factures"
         ],
         "summary": "Update Brouillon Endpoint",
-        "description": "Modifie un brouillon de facture : champs d'en-tête et, si fournies,\nremplacement complet des lignes (totaux recalculés).\n\nSeuls les brouillons sont modifiables : toute tentative sur une facture\nvalidée est refusée (409, inaltérabilité légale).",
+        "description": "Modifie un brouillon de facture : champs d'en-tête et, si fournies,\nremplacement complet des lignes. Les totaux HT/TVA/TTC sont recalculés\ndepuis les lignes à chaque modification.\n\nSeuls les brouillons sont modifiables : toute tentative sur une facture\nvalidée est refusée (409, inaltérabilité légale).",
         "operationId": "update_brouillon_endpoint_factures__facture_id__patch",
         "security": [
           {
@@ -6132,7 +6132,7 @@
               }
             ],
             "title": "Siret",
-            "description": "SIRET à 14 chiffres. Ne réécrit jamais les factures déjà émises, qui en conservent un instantané figé."
+            "description": "SIRET à 14 chiffres ; les séparateurs d'affichage (espaces, points, tirets) sont retirés automatiquement. Ne réécrit jamais les factures déjà émises, qui en conservent un instantané figé."
           },
           "id_forme_juridique": {
             "anyOf": [
@@ -6169,7 +6169,7 @@
               }
             ],
             "title": "Siret",
-            "description": "SIRET à 14 chiffres (optionnel)."
+            "description": "SIRET à 14 chiffres (optionnel). Les séparateurs d'affichage (espaces, points, tirets) sont retirés automatiquement."
           },
           "id_forme_juridique": {
             "anyOf": [
