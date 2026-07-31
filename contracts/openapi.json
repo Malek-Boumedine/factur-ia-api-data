@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.9.0"
+    "version": "1.10.0"
   },
   "paths": {
     "/auth/token": {
@@ -2997,7 +2997,7 @@
           "Gestion des Factures"
         ],
         "summary": "Generer Avoir Endpoint",
-        "description": "Génère un avoir (en brouillon) à partir d'une facture validée.\n\nRefusé (409) si la facture source n'est pas au statut 'Validée'.",
+        "description": "Génère un avoir (en brouillon) à partir d'une facture émise.\n\nToute facture émise (famille non-brouillon : validée, payée, en retard,\ndéposée PDP, rejetée PDP…) peut faire l'objet d'un avoir — seul moyen\nlégal de corriger une facture inaltérable. Refusé (409) pour un\nbrouillon (à valider d'abord), une facture annulée (déjà annulée par\nun avoir) ou un avoir (pas d'avoir d'avoir).",
         "operationId": "generer_avoir_endpoint_factures__facture_id__avoir_post",
         "security": [
           {

@@ -30,6 +30,7 @@ from src.factures.models import (
     TypeFacture,
 )
 from src.factures.schemas import FactureCreate, FactureLigneCreate, FactureUpdate
+from src.factures.statuts import est_annulee, est_brouillon, est_emise
 
 
 async def _apply_lignes(
@@ -190,7 +191,7 @@ async def update_facture_brouillon(
     if db_facture is None:
         raise FactureNotFoundError("Facture introuvable dans cet espace entreprise")
 
-    if db_facture.statut_ref is None or db_facture.statut_ref.libelle != "Brouillon":
+    if not est_brouillon(db_facture.statut_ref):
         statut_actuel = (
             db_facture.statut_ref.libelle if db_facture.statut_ref else "Inconnu"
         )
@@ -272,7 +273,7 @@ async def delete_facture_brouillon(
     if db_facture is None:
         raise FactureNotFoundError("Facture introuvable dans cet espace entreprise")
 
-    if db_facture.statut_ref is None or db_facture.statut_ref.libelle != "Brouillon":
+    if not est_brouillon(db_facture.statut_ref):
         statut_actuel = (
             db_facture.statut_ref.libelle if db_facture.statut_ref else "Inconnu"
         )
@@ -384,7 +385,7 @@ async def _valider_facture_tentative(
             f"Facture ID {facture_id} introuvable pour cette entreprise."
         )
 
-    if db_facture.statut_ref is None or db_facture.statut_ref.libelle != "Brouillon":
+    if not est_brouillon(db_facture.statut_ref):
         statut_actuel = (
             db_facture.statut_ref.libelle if db_facture.statut_ref else "Inconnu"
         )
@@ -497,7 +498,14 @@ async def generer_avoir_brouillon(
     id_createur: int,
 ) -> Facture:
     """
-    Génère un brouillon d'avoir à partir d'une facture validée existante.
+    Génère un brouillon d'avoir à partir d'une facture émise existante.
+
+    Toute facture émise (famille non-brouillon : validée, payée, en retard,
+    statuts PDP…) peut faire l'objet d'un avoir — c'est le seul moyen légal
+    de corriger une facture inaltérable, y compris après un rejet PDP.
+    Deux exclusions : une facture annulée (déjà annulée par un avoir, un
+    second créerait un double crédit) et un avoir (re-négativer les montants
+    n'a pas de sens comptable).
     """
     # 1. Récupérer la facture d'origine avec ses lignes
     stmt_origine = (
@@ -516,12 +524,22 @@ async def generer_avoir_brouillon(
             "Facture d'origine introuvable pour cette entreprise."
         )
 
-    if (
-        facture_origine.statut_ref is None
-        or facture_origine.statut_ref.libelle != "Validée"
-    ):
+    if facture_origine.type_facture == TypeFacture.AVOIR:
         raise TransitionStatutInvalideError(
-            "Seule une facture au statut 'Validée' peut faire l'objet d'un avoir."
+            "Impossible de générer un avoir à partir d'un avoir. Pour "
+            "corriger un avoir erroné, émettez une nouvelle facture."
+        )
+
+    if not est_emise(facture_origine.statut_ref):
+        raise TransitionStatutInvalideError(
+            "Impossible de générer un avoir depuis un brouillon. "
+            "Validez d'abord la facture."
+        )
+
+    if est_annulee(facture_origine.statut_ref):
+        raise TransitionStatutInvalideError(
+            "Cette facture est déjà annulée par un avoir : "
+            "impossible d'en générer un nouveau."
         )
 
     # 2. Récupérer le statut Brouillon

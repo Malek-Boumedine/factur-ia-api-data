@@ -47,6 +47,7 @@ from src.factures.statistiques import (
     calculer_statistiques,
     resoudre_periode,
 )
+from src.factures.statuts import est_emise
 from src.facturx.conformite import check_facturx_minimum
 from src.facturx.exceptions import DonneesFacturXManquantesError
 from src.facturx.schemas import RapportConformiteFacturX
@@ -382,8 +383,7 @@ async def download_facturx(
             detail="Facture introuvable dans cet espace entreprise",
         )
 
-    statut = db_facture.statut_ref
-    if statut is None or statut.libelle.strip().lower() == "brouillon":
+    if not est_emise(db_facture.statut_ref):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Le fichier Factur-X n'est disponible que pour une facture "
@@ -446,8 +446,7 @@ async def facturx_conformity_report(
             detail="Facture introuvable dans cet espace entreprise",
         )
 
-    statut = db_facture.statut_ref
-    if statut is None or statut.libelle.strip().lower() == "brouillon":
+    if not est_emise(db_facture.statut_ref):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Le rapport de conformité Factur-X n'est disponible que "
@@ -512,8 +511,7 @@ async def transmettre_choruspro(
             detail="Facture introuvable dans cet espace entreprise",
         )
 
-    statut = db_facture.statut_ref
-    if statut is None or statut.libelle.strip().lower() == "brouillon":
+    if not est_emise(db_facture.statut_ref):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Seule une facture validée peut être transmise à Chorus Pro. "
@@ -759,9 +757,13 @@ async def generer_avoir_endpoint(
     id_entreprise: TenantDep,
 ) -> Any:
     """
-    Génère un avoir (en brouillon) à partir d'une facture validée.
+    Génère un avoir (en brouillon) à partir d'une facture émise.
 
-    Refusé (409) si la facture source n'est pas au statut 'Validée'.
+    Toute facture émise (famille non-brouillon : validée, payée, en retard,
+    déposée PDP, rejetée PDP…) peut faire l'objet d'un avoir — seul moyen
+    légal de corriger une facture inaltérable. Refusé (409) pour un
+    brouillon (à valider d'abord), une facture annulée (déjà annulée par
+    un avoir) ou un avoir (pas d'avoir d'avoir).
     """
     try:
         if current_user.id is None:
