@@ -4,7 +4,8 @@ Sans base de données ni réseau : mêmes doublures que les tests de génératio
 Couvre la route ``GET /factures/{id}/facturx/conformite`` (rapport structuré,
 garde-fous 409 brouillon et 404 hors périmètre) et les règles métier de
 ``check_facturx_minimum`` : champs obligatoires, format et clé de Luhn des
-SIRET (exemption La Poste), cohérence et signe des totaux, collecte de tous
+SIRET (exemption La Poste, sévérité de la clé pilotée par
+``SIRET_LUHN_STRICT``), cohérence et signe des totaux, collecte de tous
 les problèmes sans arrêt au premier. Vérifie aussi que la génération partage
 les mêmes règles (409 sur montants incohérents).
 """
@@ -13,9 +14,11 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from src.auth.dependencies import get_current_user, verify_tenant_access
+from src.core.config import settings
 from src.core.database import get_session
 from src.entreprises.models import Entreprise
 from src.factures.models import Facture, StatutFacture, TypeFacture
@@ -230,13 +233,48 @@ def test_siret_treize_chiffres_invalide() -> None:
     assert "seller_siret_invalid" in [e.code for e in rapport.erreurs]
 
 
-def test_siret_luhn_invalide() -> None:
-    """Clé de Luhn incorrecte : rejet certain côté Chorus Pro, erreur en amont."""
+def test_siret_luhn_invalide_mode_strict(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mode strict (défaut production) : clé de Luhn incorrecte = erreur bloquante."""
+    monkeypatch.setattr(settings, "SIRET_LUHN_STRICT", True)
     rapport = check_facturx_minimum(
         _facture_validee(siret_destinataire="98765432100022"), _entreprise()
     )
     assert not rapport.conforme
-    assert "buyer_siret_invalid" in [e.code for e in rapport.erreurs]
+    assert "buyer_siret_luhn_invalid" in [e.code for e in rapport.erreurs]
+
+
+def test_siret_emetteur_luhn_invalide_mode_strict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Le SIRET émetteur porte son propre code Luhn, distinct du format."""
+    monkeypatch.setattr(settings, "SIRET_LUHN_STRICT", True)
+    rapport = check_facturx_minimum(
+        _facture_validee(siret_emetteur="12345678900016"), _entreprise()
+    )
+    assert not rapport.conforme
+    assert "seller_siret_luhn_invalid" in [e.code for e in rapport.erreurs]
+
+
+def test_siret_luhn_invalide_mode_relache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mode relâché (sandbox) : clé incorrecte = avertissement, facture conforme."""
+    monkeypatch.setattr(settings, "SIRET_LUHN_STRICT", False)
+    rapport = check_facturx_minimum(
+        _facture_validee(siret_destinataire="98765432100022"), _entreprise()
+    )
+    assert rapport.conforme
+    assert "buyer_siret_luhn_invalid" in [a.code for a in rapport.avertissements]
+
+
+def test_format_siret_reste_bloquant_en_mode_relache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Le relâchement ne concerne que la clé de Luhn, jamais le format."""
+    monkeypatch.setattr(settings, "SIRET_LUHN_STRICT", False)
+    rapport = check_facturx_minimum(
+        _facture_validee(siret_emetteur="1234567890001"), _entreprise()
+    )
+    assert not rapport.conforme
+    assert "seller_siret_invalid" in [e.code for e in rapport.erreurs]
 
 
 def test_siret_la_poste_exempte_de_luhn() -> None:

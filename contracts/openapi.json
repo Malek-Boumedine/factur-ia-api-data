@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Factur-IA API",
-    "version": "1.9.0"
+    "version": "1.10.0"
   },
   "paths": {
     "/auth/token": {
@@ -517,7 +517,7 @@
           "Ecosystème Client"
         ],
         "summary": "Rechercher une entreprise via son SIREN ou SIRET",
-        "description": "Interroge l'API gouvernementale pour\npré-remplir les données d'un client.\nAccepte un SIREN (9 chiffres) ou un SIRET (14 chiffres).",
+        "description": "Interroge l'API gouvernementale pour\npré-remplir les données d'un client.\nAccepte un SIREN (9 chiffres) ou un SIRET (14 chiffres), y compris aux\nformats d'affichage courants (espaces — même insécables —, points,\ntirets) : `340 216 121 33798` est normalisé avant l'appel SIRENE.",
         "operationId": "search_company_by_identifier_clients_recherche_sirene__identifiant__get",
         "parameters": [
           {
@@ -2589,7 +2589,7 @@
           "Gestion des Factures"
         ],
         "summary": "Get Facture",
-        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture. Si la facture est issue\nd'un OCR, `extraction` expose les métadonnées d'analyse (score global,\ntype de document détecté, scores par champ) depuis l'extraction liée la\nplus récente ; null sinon.",
+        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture. Si la facture est issue\nd'un OCR, `extraction` expose les métadonnées d'analyse (score global,\ntype de document détecté, scores par champ) depuis l'extraction liée la\nplus récente ; null sinon. `libelle_statut` expose le libellé du statut\nrésolu depuis le référentiel (mêmes valeurs que la liste) ; null si le\nréférentiel est incohérent.",
         "operationId": "get_facture_factures__facture_id__get",
         "security": [
           {
@@ -2646,7 +2646,7 @@
           "Gestion des Factures"
         ],
         "summary": "Update Brouillon Endpoint",
-        "description": "Modifie un brouillon de facture : champs d'en-tête et, si fournies,\nremplacement complet des lignes (totaux recalculés).\n\nSeuls les brouillons sont modifiables : toute tentative sur une facture\nvalidée est refusée (409, inaltérabilité légale).",
+        "description": "Modifie un brouillon de facture : champs d'en-tête et, si fournies,\nremplacement complet des lignes. Les totaux HT/TVA/TTC sont recalculés\ndepuis les lignes à chaque modification.\n\nSeuls les brouillons sont modifiables : toute tentative sur une facture\nvalidée est refusée (409, inaltérabilité légale).",
         "operationId": "update_brouillon_endpoint_factures__facture_id__patch",
         "security": [
           {
@@ -2820,7 +2820,7 @@
           "Gestion des Factures"
         ],
         "summary": "Facturx Conformity Report",
-        "description": "Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,\nsans générer le fichier : présence des données obligatoires, cohérence\ndes totaux, validité des SIRET. Les erreurs bloquent la transmission\n(la génération refuserait avec les mêmes règles) ; les avertissements\nsont informatifs. Filet de sécurité avant dépôt sur la PDP.\n\nRefusé (409) pour un brouillon — comme la génération, le rapport n'a de\nsens que sur des données figées à la validation.",
+        "description": "Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,\nsans générer le fichier : présence des données obligatoires, cohérence\ndes totaux, validité des SIRET. Les erreurs bloquent la transmission\n(la génération refuserait avec les mêmes règles) ; les avertissements\nsont informatifs. Filet de sécurité avant dépôt sur la PDP.\n\nLa clé de Luhn des SIRET (codes ``seller_siret_luhn_invalid`` /\n``buyer_siret_luhn_invalid``) est une erreur bloquante par défaut ; si le\nserveur relâche ce contrôle (sandbox Chorus Pro, ``SIRET_LUHN_STRICT=\nFalse``), ces mêmes codes sont remontés en avertissements.\n\nRefusé (409) pour un brouillon — comme la génération, le rapport n'a de\nsens que sur des données figées à la validation.",
         "operationId": "facturx_conformity_report_factures__facture_id__facturx_conformite_get",
         "security": [
           {
@@ -2997,7 +2997,7 @@
           "Gestion des Factures"
         ],
         "summary": "Generer Avoir Endpoint",
-        "description": "Génère un avoir (en brouillon) à partir d'une facture validée.\n\nRefusé (409) si la facture source n'est pas au statut 'Validée'.",
+        "description": "Génère un avoir (en brouillon) à partir d'une facture émise.\n\nToute facture émise (famille non-brouillon : validée, payée, en retard,\ndéposée PDP, rejetée PDP…) peut faire l'objet d'un avoir — seul moyen\nlégal de corriger une facture inaltérable. Refusé (409) pour un\nbrouillon (à valider d'abord), une facture annulée (déjà annulée par\nun avoir) ou un avoir (pas d'avoir d'avoir).",
         "operationId": "generer_avoir_endpoint_factures__facture_id__avoir_post",
         "security": [
           {
@@ -6132,7 +6132,7 @@
               }
             ],
             "title": "Siret",
-            "description": "SIRET à 14 chiffres. Ne réécrit jamais les factures déjà émises, qui en conservent un instantané figé."
+            "description": "SIRET à 14 chiffres ; les séparateurs d'affichage (espaces, points, tirets) sont retirés automatiquement. Ne réécrit jamais les factures déjà émises, qui en conservent un instantané figé."
           },
           "id_forme_juridique": {
             "anyOf": [
@@ -6169,7 +6169,7 @@
               }
             ],
             "title": "Siret",
-            "description": "SIRET à 14 chiffres (optionnel)."
+            "description": "SIRET à 14 chiffres (optionnel). Les séparateurs d'affichage (espaces, points, tirets) sont retirés automatiquement."
           },
           "id_forme_juridique": {
             "anyOf": [
@@ -6669,14 +6669,14 @@
           "iban": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 34
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Iban"
+            "title": "Iban",
+            "description": "IBAN masqué : seuls les 4 premiers et 4 derniers caractères sont visibles (ex : FR76 •••• •••• •••• •••• •••0 189). L'API ne renvoie jamais l'IBAN complet ; renvoyer cette valeur masquée en modification laisse l'IBAN stocké inchangé."
           },
           "reference_commande": {
             "anyOf": [
@@ -6941,14 +6941,14 @@
           "iban": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 34
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Iban"
+            "title": "Iban",
+            "description": "IBAN masqué : seuls les 4 premiers et 4 derniers caractères sont visibles (ex : FR76 •••• •••• •••• •••• •••0 189). L'API ne renvoie jamais l'IBAN complet ; renvoyer cette valeur masquée en modification laisse l'IBAN stocké inchangé."
           },
           "reference_commande": {
             "anyOf": [
@@ -7114,6 +7114,18 @@
               }
             ],
             "description": "Métadonnées de l'extraction OCR à l'origine de la facture (score global, type de document détecté, scores par champ). Null si la facture n'est pas issue d'un OCR ; résolu uniquement sur la route de détail (null sur les réponses de création/modification)."
+          },
+          "libelle_statut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle Statut",
+            "description": "Libellé du statut tel que stocké dans le référentiel (ex: brouillon, validée, payee, en_retard) ; clé à mapper côté front pour l'affichage du badge. Null si le référentiel est incohérent ; résolu uniquement sur la route de détail (null sur les réponses de création/modification)."
           }
         },
         "type": "object",
@@ -7917,7 +7929,7 @@
           "message"
         ],
         "title": "ProblemeConformiteFacturX",
-        "description": "Un problème de conformité détecté sur la facture."
+        "description": "Un problème de conformité détecté sur la facture.\n\nChaque ``code`` a une sévérité fixe (toujours erreur, ou toujours\navertissement), à une exception près : ``seller_siret_luhn_invalid`` et\n``buyer_siret_luhn_invalid`` apparaissent dans ``erreurs`` quand le\nserveur applique strictement la clé de Luhn (``SIRET_LUHN_STRICT=True``,\ndéfaut et obligation en production), mais dans ``avertissements`` quand\nle contrôle est relâché (sandbox Chorus Pro, dont les SIRET fictifs ne\nrespectent pas la clé). Le client doit donc traiter ces deux codes dans\nles deux listes."
       },
       "ProfilUpdate": {
         "properties": {

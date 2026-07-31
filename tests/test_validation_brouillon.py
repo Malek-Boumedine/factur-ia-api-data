@@ -180,7 +180,7 @@ async def test_avoir_sur_facture_non_validee_409() -> None:
         response = await client.post("/factures/42/avoir")
 
     assert response.status_code == 409
-    assert "Validée" in response.json()["detail"]
+    assert "Validez d'abord" in response.json()["detail"]
 
 
 async def test_avoir_genere_recopie_les_snapshots_de_l_origine() -> None:

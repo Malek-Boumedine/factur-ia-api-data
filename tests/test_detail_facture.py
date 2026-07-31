@@ -3,7 +3,8 @@
 Sans base de données ni réseau : app minimale avec le router factures,
 dépendances d'auth et de tenant surchargées, session factice qui restitue des
 résultats prédéfinis et capture les requêtes émises (pour vérifier
-structurellement l'isolation tenant et le chargement eager des lignes).
+structurellement l'isolation tenant et le chargement eager des lignes et
+du statut).
 """
 
 from decimal import Decimal
@@ -14,7 +15,7 @@ from httpx import ASGITransport, AsyncClient
 from src.auth.dependencies import get_current_user, verify_tenant_access
 from src.core.database import get_session
 from src.documents.models import ExtractionOcr
-from src.factures.models import Facture, FactureLigne
+from src.factures.models import Facture, FactureLigne, StatutFacture
 from src.factures.router import router as factures_router
 from src.utilisateurs.models import Utilisateur
 
@@ -50,6 +51,7 @@ def _facture_avec_lignes() -> Facture:
         total_tva=Decimal("20.00"),
         total_ttc=Decimal("120.00"),
     )
+    facture.statut_ref = StatutFacture(id=1, libelle="brouillon")
     facture.lignes = [
         FactureLigne(
             id=1,
@@ -105,7 +107,8 @@ async def _get(app: FastAPI, facture_id: int = 42) -> Any:
 
 async def test_facture_avec_lignes() -> None:
     """Facture trouvée : détail complet avec ses lignes et leurs montants.
-    Sans extraction OCR liée, `extraction` est null."""
+    Sans extraction OCR liée, `extraction` est null. Le libellé du statut est
+    résolu depuis le référentiel chargé en eager (mêmes valeurs que la liste)."""
     session = _FakeSession([_facture_avec_lignes(), None])
     response = await _get(_app(session))
 
@@ -115,6 +118,7 @@ async def test_facture_avec_lignes() -> None:
     assert body["numero_facture"] == "BROUILLON-42"
     assert body["total_ttc"] == "120.00"
     assert body["extraction"] is None
+    assert body["libelle_statut"] == "brouillon"
 
     assert len(body["lignes"]) == 2
     ligne_1, ligne_2 = body["lignes"]
@@ -158,6 +162,18 @@ async def test_facture_ocr_expose_extraction() -> None:
     statement_extraction = session.statements[1]
     assert "extraction_ocr" in str(statement_extraction)
     assert "id_facture" in str(statement_extraction)
+
+
+async def test_statut_orphelin_libelle_statut_null() -> None:
+    """Référentiel incohérent (statut non résolu) : `libelle_statut` est null,
+    le détail répond 200 plutôt qu'un 500."""
+    facture = _facture_avec_lignes()
+    facture.statut_ref = None
+    session = _FakeSession([facture, None])
+    response = await _get(_app(session))
+
+    assert response.status_code == 200
+    assert response.json()["libelle_statut"] is None
 
 
 async def test_facture_hors_perimetre_ou_inexistante_404() -> None:
