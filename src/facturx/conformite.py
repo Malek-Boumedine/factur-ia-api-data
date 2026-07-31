@@ -10,11 +10,19 @@ appliqué au moment de la génération (``check_xsd=True``).
 Les erreurs bloquent la transmission (le fichier serait rejeté par la
 plateforme de dématérialisation) ; les avertissements signalent les limites
 connues des données sans empêcher l'envoi.
+
+La clé de Luhn des SIRET est bloquante par défaut (``SIRET_LUHN_STRICT=True``,
+comportement requis en production : Chorus Pro rejette un SIRET à clé
+invalide). En sandbox/qualification, où les SIRET fictifs du matelas
+Chorus Pro ne respectent pas la clé de contrôle, ``SIRET_LUHN_STRICT=False``
+la relâche en simple avertissement. Le format (14 chiffres) reste bloquant
+dans les deux modes.
 """
 
 import re
 from decimal import Decimal
 
+from src.core.config import settings
 from src.entreprises.models import Entreprise
 from src.factures.models import Facture, TypeFacture
 from src.facturx.schemas import ProblemeConformiteFacturX, RapportConformiteFacturX
@@ -41,15 +49,14 @@ def _luhn_valid(digits: str) -> bool:
     return total % 10 == 0
 
 
-def _siret_error(siret: str) -> str | None:
-    """Renvoie la raison d'invalidité d'un SIRET, ou None s'il est valide."""
-    if not _SIRET_RE.fullmatch(siret):
-        return "doit comporter exactement 14 chiffres"
-    if siret.startswith(SIREN_LA_POSTE):
-        return None
-    if not _luhn_valid(siret):
-        return "clé de contrôle (Luhn) invalide"
-    return None
+def _siret_format_valid(siret: str) -> bool:
+    """Contrôle le format d'un SIRET : exactement 14 chiffres."""
+    return _SIRET_RE.fullmatch(siret) is not None
+
+
+def _siret_luhn_valid(siret: str) -> bool:
+    """Contrôle la clé de Luhn d'un SIRET (exemption officielle La Poste)."""
+    return siret.startswith(SIREN_LA_POSTE) or _luhn_valid(siret)
 
 
 def check_facturx_minimum(
@@ -73,6 +80,33 @@ def check_facturx_minimum(
         avertissements.append(
             ProblemeConformiteFacturX(champ=champ, code=code, message=message)
         )
+
+    def check_siret(champ: str, code_prefix: str, role_label: str, siret: str) -> None:
+        """Contrôle un SIRET présent : format (toujours bloquant), puis clé
+        de Luhn (bloquante ou simple avertissement selon SIRET_LUHN_STRICT)."""
+        if not _siret_format_valid(siret):
+            erreur(
+                champ,
+                f"{code_prefix}_siret_invalid",
+                f"SIRET {role_label} « {siret} » invalide : doit comporter "
+                "exactement 14 chiffres.",
+            )
+        elif not _siret_luhn_valid(siret):
+            if settings.SIRET_LUHN_STRICT:
+                erreur(
+                    champ,
+                    f"{code_prefix}_siret_luhn_invalid",
+                    f"SIRET {role_label} « {siret} » : clé de contrôle (Luhn) "
+                    "invalide — le dépôt serait refusé par Chorus Pro.",
+                )
+            else:
+                avertissement(
+                    champ,
+                    f"{code_prefix}_siret_luhn_invalid",
+                    f"SIRET {role_label} « {siret} » : clé de contrôle (Luhn) "
+                    "invalide — toléré ici (contrôle relâché hors production), "
+                    "mais un dépôt en production serait refusé par Chorus Pro.",
+                )
 
     # Numéro (BT-1) — non-nullable en base, filet de sécurité.
     if not facture.numero_facture.strip():
@@ -114,13 +148,7 @@ def check_facturx_minimum(
             "Le SIRET de l'émetteur n'a pas été figé à la validation.",
         )
     else:
-        raison = _siret_error(facture.siret_emetteur)
-        if raison is not None:
-            erreur(
-                "siret_emetteur",
-                "seller_siret_invalid",
-                f"SIRET émetteur « {facture.siret_emetteur} » invalide : {raison}.",
-            )
+        check_siret("siret_emetteur", "seller", "émetteur", facture.siret_emetteur)
 
     # Nom de l'acheteur (BT-44) — depuis le snapshot client figé.
     snapshot = facture.snapshot_client or {}
@@ -142,14 +170,9 @@ def check_facturx_minimum(
             "attendu pour une facture B2B en France.",
         )
     else:
-        raison = _siret_error(facture.siret_destinataire)
-        if raison is not None:
-            erreur(
-                "siret_destinataire",
-                "buyer_siret_invalid",
-                "SIRET destinataire "
-                f"« {facture.siret_destinataire} » invalide : {raison}.",
-            )
+        check_siret(
+            "siret_destinataire", "buyer", "destinataire", facture.siret_destinataire
+        )
 
     # Cohérence arithmétique des totaux (BT-109, BT-110, BT-112).
     ecart = abs(facture.total_ttc - (facture.total_ht + facture.total_tva))

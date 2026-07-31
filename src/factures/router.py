@@ -437,6 +437,11 @@ async def facturx_conformity_report(
     (la génération refuserait avec les mêmes règles) ; les avertissements
     sont informatifs. Filet de sécurité avant dépôt sur la PDP.
 
+    La clé de Luhn des SIRET (codes ``seller_siret_luhn_invalid`` /
+    ``buyer_siret_luhn_invalid``) est une erreur bloquante par défaut ; si le
+    serveur relâche ce contrôle (sandbox Chorus Pro, ``SIRET_LUHN_STRICT=
+    False``), ces mêmes codes sont remontés en avertissements.
+
     Refusé (409) pour un brouillon — comme la génération, le rapport n'a de
     sens que sur des données figées à la validation.
     """

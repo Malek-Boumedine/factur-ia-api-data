@@ -6,7 +6,8 @@ factures, et validation XSD contre les schémas embarqués dans la librairie
 le XSD MINIMUM), la structure PDF/A-3 (pièce jointe ``factur-x.xml``, clé
 ``/AF``, métadonnées XMP), le contenu (numéro, totaux, TypeCode 380/381) et
 les garde-fous : 409 sur brouillon, 404 hors périmètre entreprise, 409 si le
-SIRET émetteur manque.
+SIRET émetteur manque, clé de Luhn bloquante ou non selon
+``SIRET_LUHN_STRICT``.
 """
 
 import io
@@ -15,11 +16,13 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient, Response
 from lxml import etree
 from pypdf import PdfReader
 from src.auth.dependencies import get_current_user, verify_tenant_access
+from src.core.config import settings
 from src.core.database import get_session
 from src.entreprises.models import Entreprise
 from src.factures.models import (
@@ -78,6 +81,7 @@ def _facture_validee(
     statut: str = "validée",
     type_facture: TypeFacture = TypeFacture.FACTURE,
     siret_emetteur: str | None = "12345678900015",
+    siret_destinataire: str = "98765432100023",
 ) -> Facture:
     facture = Facture(
         id=42,
@@ -91,7 +95,7 @@ def _facture_validee(
         type_facture=type_facture,
         id_statut=2,
         siret_emetteur=siret_emetteur,
-        siret_destinataire="98765432100023",
+        siret_destinataire=siret_destinataire,
         snapshot_client={
             "raison_sociale": "Client Test SARL",
             "adresse": "1 rue de la Paix",
@@ -260,6 +264,26 @@ async def test_siret_emetteur_manquant() -> None:
     response = await _telecharger(_facture_validee(siret_emetteur=None))
     assert response.status_code == 409
     assert "SIRET" in response.json()["detail"]
+
+
+async def test_luhn_invalide_mode_strict_refuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mode strict (défaut production) : clé de Luhn invalide, génération 409."""
+    monkeypatch.setattr(settings, "SIRET_LUHN_STRICT", True)
+    response = await _telecharger(_facture_validee(siret_destinataire="98765432100022"))
+    assert response.status_code == 409
+    assert "luhn" in response.json()["detail"].lower()
+
+
+async def test_luhn_invalide_mode_relache_genere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mode relâché (sandbox) : la même facture est générée malgré la clé."""
+    monkeypatch.setattr(settings, "SIRET_LUHN_STRICT", False)
+    response = await _telecharger(_facture_validee(siret_destinataire="98765432100022"))
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
 
 
 async def test_iban_complet_sur_le_pdf() -> None:

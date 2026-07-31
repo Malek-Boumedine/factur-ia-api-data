@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     CHORUS_OAUTH_URL: str = "https://sandbox-oauth.piste.gouv.fr/api/oauth/token"
     CHORUS_BASE_URL: str = "https://sandbox-api.piste.gouv.fr"
 
+    # Clé de Luhn des SIRET (conformité Factur-X). Défaut strict : une clé
+    # invalide est une erreur bloquante — comportement requis en production
+    # (Chorus Pro rejetterait le dépôt), et filet de sécurité si la variable
+    # est oubliée. À passer à False uniquement en sandbox/qualification : les
+    # SIRET fictifs du matelas Chorus Pro ne respectent pas la clé de
+    # contrôle, qui est alors signalée en simple avertissement.
+    SIRET_LUHN_STRICT: bool = True
+
     # RÉINITIALISATION DE MOT DE PASSE
     # Valeurs par défaut fournies pour ne pas bloquer le démarrage ;
     # à surcharger via l'environnement en production.

@@ -2820,7 +2820,7 @@
           "Gestion des Factures"
         ],
         "summary": "Facturx Conformity Report",
-        "description": "Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,\nsans générer le fichier : présence des données obligatoires, cohérence\ndes totaux, validité des SIRET. Les erreurs bloquent la transmission\n(la génération refuserait avec les mêmes règles) ; les avertissements\nsont informatifs. Filet de sécurité avant dépôt sur la PDP.\n\nRefusé (409) pour un brouillon — comme la génération, le rapport n'a de\nsens que sur des données figées à la validation.",
+        "description": "Rapport de conformité Factur-X (profil MINIMUM) d'une facture validée,\nsans générer le fichier : présence des données obligatoires, cohérence\ndes totaux, validité des SIRET. Les erreurs bloquent la transmission\n(la génération refuserait avec les mêmes règles) ; les avertissements\nsont informatifs. Filet de sécurité avant dépôt sur la PDP.\n\nLa clé de Luhn des SIRET (codes ``seller_siret_luhn_invalid`` /\n``buyer_siret_luhn_invalid``) est une erreur bloquante par défaut ; si le\nserveur relâche ce contrôle (sandbox Chorus Pro, ``SIRET_LUHN_STRICT=\nFalse``), ces mêmes codes sont remontés en avertissements.\n\nRefusé (409) pour un brouillon — comme la génération, le rapport n'a de\nsens que sur des données figées à la validation.",
         "operationId": "facturx_conformity_report_factures__facture_id__facturx_conformite_get",
         "security": [
           {
@@ -7929,7 +7929,7 @@
           "message"
         ],
         "title": "ProblemeConformiteFacturX",
-        "description": "Un problème de conformité détecté sur la facture."
+        "description": "Un problème de conformité détecté sur la facture.\n\nChaque ``code`` a une sévérité fixe (toujours erreur, ou toujours\navertissement), à une exception près : ``seller_siret_luhn_invalid`` et\n``buyer_siret_luhn_invalid`` apparaissent dans ``erreurs`` quand le\nserveur applique strictement la clé de Luhn (``SIRET_LUHN_STRICT=True``,\ndéfaut et obligation en production), mais dans ``avertissements`` quand\nle contrôle est relâché (sandbox Chorus Pro, dont les SIRET fictifs ne\nrespectent pas la clé). Le client doit donc traiter ces deux codes dans\nles deux listes."
       },
       "ProfilUpdate": {
         "properties": {
