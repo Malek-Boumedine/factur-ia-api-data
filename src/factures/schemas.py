@@ -2,8 +2,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
+from src.core.crypto import MASK_CHAR, is_masked, mask_iban
 from src.documents.schemas import ExtractionOcrRead
 from src.factures.models import Facture, TypeFacture
 
@@ -121,6 +122,22 @@ class FactureCreate(SiretBrouillonMixin, FactureBase):
         ..., min_length=1, description="Liste des articles (au moins 1 requis)"
     )
 
+    @field_validator("iban", mode="before")
+    @classmethod
+    def refuse_masked_iban(cls, value: object) -> object:
+        """Un IBAN masqué à la création est forcément un écho du front (422).
+
+        Les lectures API renvoient l'IBAN masqué (``FR76 •••• …``) : cette
+        valeur ne doit jamais être restockée. À la création, il n'existe
+        aucune valeur à préserver — on refuse explicitement. En mode
+        ``before`` pour porter ce message plutôt qu'une erreur de longueur.
+        """
+        if isinstance(value, str) and is_masked(value):
+            raise ValueError(
+                "IBAN masqué reçu : envoyez l'IBAN complet ou omettez le champ."
+            )
+        return value
+
 
 class FactureUpdate(SiretBrouillonMixin):
     """
@@ -139,6 +156,20 @@ class FactureUpdate(SiretBrouillonMixin):
     iban: str | None = Field(default=None, max_length=34)
     reference_commande: str | None = Field(default=None, max_length=100)
     notes: str | None = None
+
+    @field_validator("iban", mode="before")
+    @classmethod
+    def squash_masked_iban(cls, value: object) -> object:
+        """Un IBAN masqué renvoyé tel quel au PATCH vaut « inchangé ».
+
+        Les lectures API renvoient l'IBAN masqué : si le front le réexpédie,
+        il ne doit pas écraser la vraie valeur. Réduit au seul caractère de
+        masquage (en mode ``before``, pour passer la contrainte de longueur
+        quel que soit le format du masque) ; le service l'ignore ensuite.
+        """
+        if isinstance(value, str) and is_masked(value):
+            return MASK_CHAR
+        return value
 
     # Si des lignes sont envoyées lors de l'update,
     # elles remplacent intégralement les anciennes (totaux recalculés).
@@ -174,6 +205,23 @@ class FactureRead(FactureBase):
     id_facture_origine: int | None = Field(
         default=None, description="Facture d'origine si ce document est un avoir"
     )
+
+    # Redéclaré pour documenter le masquage (la valeur claire vient de l'ORM,
+    # la sérialisation la masque ; le masque dépasse les 34 caractères du clair).
+    iban: str | None = Field(
+        default=None,
+        description="IBAN masqué : seuls les 4 premiers et 4 derniers "
+        "caractères sont visibles (ex : FR76 •••• •••• •••• •••• •••0 189). "
+        "L'API ne renvoie jamais l'IBAN complet ; renvoyer cette valeur "
+        "masquée en modification laisse l'IBAN stocké inchangé.",
+    )
+
+    @field_serializer("iban")
+    def serialize_iban_masque(self, value: str | None) -> str | None:
+        """L'IBAN complet ne sort jamais par l'API : masqué à la sérialisation."""
+        if value is None:
+            return None
+        return mask_iban(value)
 
     # Snapshots (historique figé)
     siret_emetteur: str | None = None

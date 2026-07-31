@@ -6669,14 +6669,14 @@
           "iban": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 34
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Iban"
+            "title": "Iban",
+            "description": "IBAN masqué : seuls les 4 premiers et 4 derniers caractères sont visibles (ex : FR76 •••• •••• •••• •••• •••0 189). L'API ne renvoie jamais l'IBAN complet ; renvoyer cette valeur masquée en modification laisse l'IBAN stocké inchangé."
           },
           "reference_commande": {
             "anyOf": [
@@ -6941,14 +6941,14 @@
           "iban": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 34
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Iban"
+            "title": "Iban",
+            "description": "IBAN masqué : seuls les 4 premiers et 4 derniers caractères sont visibles (ex : FR76 •••• •••• •••• •••• •••0 189). L'API ne renvoie jamais l'IBAN complet ; renvoyer cette valeur masquée en modification laisse l'IBAN stocké inchangé."
           },
           "reference_commande": {
             "anyOf": [

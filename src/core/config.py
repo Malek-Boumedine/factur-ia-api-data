@@ -1,6 +1,7 @@
 from typing import Any
 
-from pydantic import model_validator
+from cryptography.fernet import Fernet
+from pydantic import field_validator, model_validator
 from pydantic_core import PydanticUndefined
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -29,6 +30,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str
 
     SECRET_OCR_TOKEN: str
+
+    # Chiffrement des IBAN au repos (Fernet). Requise sans défaut : sans clé,
+    # l'application ne démarre pas — jamais de repli en stockage clair.
+    # ATTENTION : perdre cette clé rend les IBAN chiffrés irrécupérables.
+    IBAN_ENCRYPTION_KEY: str
 
     # API IA D'EXTRACTION (OCR)
     IA_API_BASE_URL: str
@@ -60,6 +66,21 @@ class Settings(BaseSettings):
     PLATFORM_ADMIN_PASSWORD: str | None = None
     PLATFORM_ADMIN_NOM: str = "Admin"
     PLATFORM_ADMIN_PRENOM: str = "Plateforme"
+
+    @field_validator("IBAN_ENCRYPTION_KEY")
+    @classmethod
+    def _validate_fernet_key(cls, value: str) -> str:
+        """Refuse au démarrage une clé mal formée, avec la marche à suivre."""
+        try:
+            Fernet(value.encode())
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                "IBAN_ENCRYPTION_KEY n'est pas une clé Fernet valide. "
+                "Générer une clé avec : uv run python -c "
+                '"from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            ) from exc
+        return value
 
     @model_validator(mode="before")
     @classmethod

@@ -260,3 +260,18 @@ async def test_siret_emetteur_manquant() -> None:
     response = await _telecharger(_facture_validee(siret_emetteur=None))
     assert response.status_code == 409
     assert "SIRET" in response.json()["detail"]
+
+
+async def test_iban_complet_sur_le_pdf() -> None:
+    """L'IBAN figure en entier sur le PDF (mention de paiement), jamais masqué.
+
+    C'est le seul canal légitime pour l'IBAN complet : les lectures API le
+    masquent, mais la facture émise doit porter les coordonnées de règlement.
+    """
+    response = await _telecharger(_facture_validee())
+    assert response.status_code == 200
+
+    reader = PdfReader(io.BytesIO(response.content))
+    texte = "".join(page.extract_text() for page in reader.pages)
+    assert "FR7630006000011234567890189" in texte.replace(" ", "")
+    assert "•" not in texte

@@ -10,6 +10,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.clients.models import Client
+from src.core.crypto import is_masked
 from src.documents.models import ExtractionOcr
 from src.entreprises.models import Entreprise
 from src.factures.exceptions import (
@@ -202,6 +203,12 @@ async def update_facture_brouillon(
 
     # 2. Mise à jour de l'en-tête (seuls les champs envoyés sont modifiés)
     donnees = facture_in.model_dump(exclude_unset=True, exclude={"lignes"})
+
+    # L'API renvoie l'IBAN masqué en lecture : si le front réexpédie ce masque
+    # tel quel, il vaut « inchangé » — il ne doit pas écraser la vraie valeur.
+    iban_recu = donnees.get("iban")
+    if isinstance(iban_recu, str) and is_masked(iban_recu):
+        donnees.pop("iban")
 
     # Cohérence comptable : un avoir lié à une facture d'origine
     # ne peut pas changer de type.
