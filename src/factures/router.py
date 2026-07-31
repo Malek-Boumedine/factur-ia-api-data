@@ -304,12 +304,17 @@ async def get_facture(
     avant validation, mais valable pour toute facture. Si la facture est issue
     d'un OCR, `extraction` expose les métadonnées d'analyse (score global,
     type de document détecté, scores par champ) depuis l'extraction liée la
-    plus récente ; null sinon.
+    plus récente ; null sinon. `libelle_statut` expose le libellé du statut
+    résolu depuis le référentiel (mêmes valeurs que la liste) ; null si le
+    référentiel est incohérent.
     """
     statement = (
         select(Facture)
         .where(Facture.id == facture_id, Facture.id_entreprise == id_entreprise)
-        .options(selectinload(Facture.lignes))  # type: ignore
+        .options(
+            selectinload(Facture.lignes),  # type: ignore
+            selectinload(Facture.statut_ref),  # type: ignore
+        )
     )
     result = await session.exec(statement)
     db_facture = result.first()
@@ -321,6 +326,9 @@ async def get_facture(
         )
 
     facture_read = FactureReadWithLignes.model_validate(db_facture)
+    # Référentiel incohérent (statut orphelin) : null plutôt qu'un 500.
+    statut_ref = db_facture.statut_ref
+    facture_read.libelle_statut = statut_ref.libelle if statut_ref is not None else None
 
     result_extraction = await session.exec(
         select(ExtractionOcr)

@@ -151,6 +151,9 @@ async def test_avoir_possible_sur_toute_facture_emise(statut: str) -> None:
     body = response.json()
     assert body["type_facture"] == "avoir"
     assert body["id_facture_origine"] == 42
+    # Portée du champ : résolu sur la route de détail uniquement,
+    # null sur les réponses de création/modification.
+    assert body["libelle_statut"] is None
 
 
 @pytest.mark.parametrize("statut", ["brouillon", "Brouillon"])

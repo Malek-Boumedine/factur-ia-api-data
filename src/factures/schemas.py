@@ -390,6 +390,15 @@ class FactureReadWithLignes(FactureRead):
         "détail (null sur les réponses de création/modification).",
     )
 
+    libelle_statut: str | None = Field(
+        default=None,
+        description="Libellé du statut tel que stocké dans le référentiel "
+        "(ex: brouillon, validée, payee, en_retard) ; clé à mapper côté front "
+        "pour l'affichage du badge. Null si le référentiel est incohérent ; "
+        "résolu uniquement sur la route de détail (null sur les réponses de "
+        "création/modification).",
+    )
+
 
 class TransmissionChorusPro(BaseModel):
     """Résultat du dépôt d'une facture Factur-X sur Chorus Pro.

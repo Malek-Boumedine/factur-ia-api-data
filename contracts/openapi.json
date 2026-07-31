@@ -2589,7 +2589,7 @@
           "Gestion des Factures"
         ],
         "summary": "Get Facture",
-        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture. Si la facture est issue\nd'un OCR, `extraction` expose les métadonnées d'analyse (score global,\ntype de document détecté, scores par champ) depuis l'extraction liée la\nplus récente ; null sinon.",
+        "description": "Récupère le détail d'une facture avec ses lignes, en s'assurant qu'elle\nappartient bien à l'entreprise active (isolation des données).\n\nPensée pour l'affichage du récapitulatif d'un brouillon (human-in-the-loop)\navant validation, mais valable pour toute facture. Si la facture est issue\nd'un OCR, `extraction` expose les métadonnées d'analyse (score global,\ntype de document détecté, scores par champ) depuis l'extraction liée la\nplus récente ; null sinon. `libelle_statut` expose le libellé du statut\nrésolu depuis le référentiel (mêmes valeurs que la liste) ; null si le\nréférentiel est incohérent.",
         "operationId": "get_facture_factures__facture_id__get",
         "security": [
           {
@@ -7114,6 +7114,18 @@
               }
             ],
             "description": "Métadonnées de l'extraction OCR à l'origine de la facture (score global, type de document détecté, scores par champ). Null si la facture n'est pas issue d'un OCR ; résolu uniquement sur la route de détail (null sur les réponses de création/modification)."
+          },
+          "libelle_statut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Libelle Statut",
+            "description": "Libellé du statut tel que stocké dans le référentiel (ex: brouillon, validée, payee, en_retard) ; clé à mapper côté front pour l'affichage du badge. Null si le référentiel est incohérent ; résolu uniquement sur la route de détail (null sur les réponses de création/modification)."
           }
         },
         "type": "object",
