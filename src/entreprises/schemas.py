@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.core.siret import validate_siret_strict
+
 
 class EntrepriseCreate(BaseModel):
     """Données d'onboarding pour créer un premier espace de travail."""
@@ -11,19 +13,20 @@ class EntrepriseCreate(BaseModel):
         default=None,
         min_length=14,
         max_length=14,
-        description="SIRET à 14 chiffres (optionnel).",
+        description="SIRET à 14 chiffres (optionnel). Les séparateurs "
+        "d'affichage (espaces, points, tirets) sont retirés automatiquement.",
     )
     id_forme_juridique: int | None = Field(default=None)
 
-    @field_validator("siret")
+    @field_validator("siret", mode="before")
     @classmethod
-    def _valider_siret(cls, valeur: str | None) -> str | None:
-        """Vérifie que le SIRET, s'il est fourni, comporte 14 chiffres."""
-        if valeur is None:
-            return valeur
-        if not valeur.isdigit() or len(valeur) != 14:
-            raise ValueError("Le SIRET doit comporter exactement 14 chiffres.")
-        return valeur
+    def _valider_siret(cls, valeur: object) -> object:
+        """Normalise (séparateurs d'affichage retirés) puis exige 14 chiffres.
+
+        En mode ``before`` : le nettoyage doit précéder les contraintes
+        ``min_length``/``max_length`` du champ.
+        """
+        return validate_siret_strict(valeur)
 
 
 class EntrepriseRead(BaseModel):

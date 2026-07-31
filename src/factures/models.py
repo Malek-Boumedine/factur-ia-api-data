@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy import JSON, TEXT, Column, DateTime, Index, Numeric
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint
 
+from src.core.crypto import EncryptedStr
 from src.documents.models import Document
 
 if TYPE_CHECKING:
@@ -101,7 +102,10 @@ class Facture(SQLModel, table=True):
     date_transmission_chorus: datetime | None = Field(default=None)
 
     mode_paiement: str | None = Field(default=None, max_length=50)
-    iban: str | None = Field(default=None, max_length=34)
+    # Chiffré au repos (Fernet) : clair côté Python, token en base.
+    iban: str | None = Field(
+        default=None, sa_column=Column(EncryptedStr, nullable=True)
+    )
     reference_commande: str | None = Field(default=None, max_length=100)
 
     date_creation: datetime = Field(default_factory=lambda: datetime.now(UTC))

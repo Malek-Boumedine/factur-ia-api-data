@@ -1,12 +1,14 @@
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 from pydantic import ValidationError
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from src.core.crypto import mask_iban
 from src.core.database import async_session_maker
 from src.documents.exceptions import DocumentIntrouvableError, DocumentLieAFactureError
 from src.documents.models import (
@@ -154,6 +156,19 @@ async def _payload_vers_facture_create(
     )
 
 
+def _contenu_brut_masque(payload: OcrWebhookPayload) -> dict[str, Any]:
+    """Payload OCR sérialisé pour archivage, IBAN masqué.
+
+    Le JSON ``contenu_brut`` ne sert qu'au diagnostic : y conserver l'IBAN en
+    clair contournerait le chiffrement au repos de ``facture.iban`` (même dump
+    SQL). La vraie valeur vit uniquement, chiffrée, sur le brouillon créé.
+    """
+    contenu = payload.model_dump(mode="json")
+    if contenu.get("iban"):
+        contenu["iban"] = mask_iban(contenu["iban"])
+    return contenu
+
+
 def _par_champ_as_json(par_champ: dict[str, Decimal] | None) -> dict[str, str] | None:
     """Scores par champ sérialisés en chaînes (précision Decimal préservée)."""
     if par_champ is None:
@@ -177,7 +192,7 @@ async def _enregistrer_echec(
 
     extraction = ExtractionOcr(
         id_document=payload.id_document,
-        contenu_brut=payload.model_dump(mode="json"),
+        contenu_brut=_contenu_brut_masque(payload),
         score_confiance=payload.score_confiance,
         statut=StatutExtraction.ECHEC,
         type_document=payload.type_document,
@@ -230,7 +245,7 @@ async def traiter_callback_ocr(
 
     extraction = ExtractionOcr(
         id_document=document.id,
-        contenu_brut=payload.model_dump(mode="json"),
+        contenu_brut=_contenu_brut_masque(payload),
         score_confiance=payload.score_confiance,
         statut=StatutExtraction.SUCCES,
         id_facture=facture.id,

@@ -2,8 +2,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
+from src.core.siret import normalize_siret_input
 from src.documents.models import Document, StatutDocument, StatutExtraction
 
 # Miroir strict du contrat de l'API IA : une valeur hors liste est un signal
@@ -85,6 +86,21 @@ class OcrWebhookPayload(BaseModel):
     # plus) ; les scores en chaînes du contrat sont reparsés en Decimal.
     type_document: TypeDocumentOcr | None = None
     par_champ: dict[str, Decimal] | None = None
+
+    @field_validator("siret_emetteur", "siret_destinataire", mode="before")
+    @classmethod
+    def normalize_siret(cls, value: object) -> object:
+        """Séparateurs d'affichage retirés dès la réception du webhook.
+
+        Nettoyage seul, sans contrôle de contenu : un SIRET illisible doit
+        passer la porte du webhook pour être tracé en échec d'extraction
+        (et non rejeté en 422, ce qui laisserait le document EN_COURS).
+        Normaliser ici couvre aussi la réconciliation de l'émetteur, qui
+        recopie la valeur du payload directement sur le brouillon.
+        """
+        if not isinstance(value, str):
+            return value
+        return normalize_siret_input(value)
 
 
 class ExtractionOcrRead(BaseModel):

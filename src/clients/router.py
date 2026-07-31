@@ -21,6 +21,7 @@ from src.clients.schemas import (
 from src.core.database import get_session
 from src.core.db_errors import UniqueConflict, conflict_from_integrity_error
 from src.core.pagination import Page, PaginationParams, apply_search, paginate
+from src.core.siret import normalize_siret_input
 from src.integrations.siren_gouv.client import get_company_by_identifier
 from src.utilisateurs.models import Utilisateur
 
@@ -218,10 +219,11 @@ async def search_company_by_identifier(identifiant: str) -> dict[str, Any]:
     """
     Interroge l'API gouvernementale pour
     pré-remplir les données d'un client.
-    Accepte un SIREN (9 chiffres) ou un SIRET (14 chiffres).
+    Accepte un SIREN (9 chiffres) ou un SIRET (14 chiffres), y compris aux
+    formats d'affichage courants (espaces — même insécables —, points,
+    tirets) : `340 216 121 33798` est normalisé avant l'appel SIRENE.
     """
-    # on enlève les espaces éventuels
-    clean_id = identifiant.replace(" ", "")
+    clean_id = normalize_siret_input(identifiant)
 
     # Validation pour 9 (SIREN) ou 14 (SIRET) chiffres
     if len(clean_id) not in (9, 14) or not clean_id.isdigit():

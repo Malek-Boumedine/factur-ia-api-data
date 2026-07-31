@@ -45,6 +45,7 @@ from src.factures.schemas import (
     TotauxBrouillons,
     TotauxStatistiques,
 )
+from src.factures.statuts import LIBELLE_ANNULEE, LIBELLE_BROUILLON
 
 # Devise des montants agrégés par défaut : on n'additionne jamais deux devises.
 DEVISE_PAR_DEFAUT = "EUR"
@@ -55,12 +56,10 @@ MOIS_PERIODE_PAR_DEFAUT = 12
 LIMITE_TOP_CLIENTS_PAR_DEFAUT = 5
 LIMITE_TOP_CLIENTS_MAX = 20
 
-# Libellés du référentiel `statut_facture` (cf. src/core/seed.py). Comparés en
-# `ilike` sans joker — égalité insensible à la casse, comme la route de liste.
-LIBELLE_BROUILLON = "brouillon"
-
 # Statuts qui soldent une facture : elle ne pèse plus sur l'encours client.
-LIBELLES_SOLDES = ("payee", "annulee")
+# Libellés comparés en `ilike` sans joker — égalité insensible à la casse,
+# comme la route de liste.
+LIBELLES_SOLDES = ("payee", LIBELLE_ANNULEE)
 
 CENTIME = Decimal("0.01")
 

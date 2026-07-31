@@ -1,6 +1,7 @@
 from typing import Any
 
-from pydantic import model_validator
+from cryptography.fernet import Fernet
+from pydantic import field_validator, model_validator
 from pydantic_core import PydanticUndefined
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,6 +31,11 @@ class Settings(BaseSettings):
 
     SECRET_OCR_TOKEN: str
 
+    # Chiffrement des IBAN au repos (Fernet). Requise sans défaut : sans clé,
+    # l'application ne démarre pas — jamais de repli en stockage clair.
+    # ATTENTION : perdre cette clé rend les IBAN chiffrés irrécupérables.
+    IBAN_ENCRYPTION_KEY: str
+
     # API IA D'EXTRACTION (OCR)
     IA_API_BASE_URL: str
 
@@ -46,6 +52,14 @@ class Settings(BaseSettings):
     CHORUS_OAUTH_URL: str = "https://sandbox-oauth.piste.gouv.fr/api/oauth/token"
     CHORUS_BASE_URL: str = "https://sandbox-api.piste.gouv.fr"
 
+    # Clé de Luhn des SIRET (conformité Factur-X). Défaut strict : une clé
+    # invalide est une erreur bloquante — comportement requis en production
+    # (Chorus Pro rejetterait le dépôt), et filet de sécurité si la variable
+    # est oubliée. À passer à False uniquement en sandbox/qualification : les
+    # SIRET fictifs du matelas Chorus Pro ne respectent pas la clé de
+    # contrôle, qui est alors signalée en simple avertissement.
+    SIRET_LUHN_STRICT: bool = True
+
     # RÉINITIALISATION DE MOT DE PASSE
     # Valeurs par défaut fournies pour ne pas bloquer le démarrage ;
     # à surcharger via l'environnement en production.
@@ -60,6 +74,21 @@ class Settings(BaseSettings):
     PLATFORM_ADMIN_PASSWORD: str | None = None
     PLATFORM_ADMIN_NOM: str = "Admin"
     PLATFORM_ADMIN_PRENOM: str = "Plateforme"
+
+    @field_validator("IBAN_ENCRYPTION_KEY")
+    @classmethod
+    def _validate_fernet_key(cls, value: str) -> str:
+        """Refuse au démarrage une clé mal formée, avec la marche à suivre."""
+        try:
+            Fernet(value.encode())
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                "IBAN_ENCRYPTION_KEY n'est pas une clé Fernet valide. "
+                "Générer une clé avec : uv run python -c "
+                '"from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
+            ) from exc
+        return value
 
     @model_validator(mode="before")
     @classmethod

@@ -155,6 +155,27 @@ async def test_edition_en_tete_seule() -> None:
     assert "id_entreprise" in str(session.statements[0])
 
 
+async def test_resynchronisation_totaux_sur_patch_en_tete() -> None:
+    """Brouillon aux totaux divergents de ses lignes (données legacy) : un
+    PATCH d'en-tête seul les resynchronise sur la somme des lignes, sans
+    toucher aux lignes elles-mêmes."""
+    facture = _facture_brouillon()
+    facture.total_ht = Decimal("999.99")
+    facture.total_tva = Decimal("99.99")
+    facture.total_ttc = Decimal("1099.98")
+    session = _FakeSession([facture, facture])
+    response = await _patch(_app(session), {"notes": "resynchronisation"})
+
+    assert response.status_code == 200
+    body = response.json()
+    # Somme des lignes de la fixture : 80 + 20 HT, 16 + 4 TVA
+    assert body["total_ht"] == "100.00"
+    assert body["total_tva"] == "20.00"
+    assert body["total_ttc"] == "120.00"
+    assert session.deleted == []
+    assert session.added == []
+
+
 async def test_remplacement_lignes_et_recalcul_totaux() -> None:
     """Payload avec lignes : anciennes supprimées,
     nouvelles créées, totaux recalculés.

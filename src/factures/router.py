@@ -47,6 +47,7 @@ from src.factures.statistiques import (
     calculer_statistiques,
     resoudre_periode,
 )
+from src.factures.statuts import est_emise
 from src.facturx.conformite import check_facturx_minimum
 from src.facturx.exceptions import DonneesFacturXManquantesError
 from src.facturx.schemas import RapportConformiteFacturX
@@ -303,12 +304,17 @@ async def get_facture(
     avant validation, mais valable pour toute facture. Si la facture est issue
     d'un OCR, `extraction` expose les métadonnées d'analyse (score global,
     type de document détecté, scores par champ) depuis l'extraction liée la
-    plus récente ; null sinon.
+    plus récente ; null sinon. `libelle_statut` expose le libellé du statut
+    résolu depuis le référentiel (mêmes valeurs que la liste) ; null si le
+    référentiel est incohérent.
     """
     statement = (
         select(Facture)
         .where(Facture.id == facture_id, Facture.id_entreprise == id_entreprise)
-        .options(selectinload(Facture.lignes))  # type: ignore
+        .options(
+            selectinload(Facture.lignes),  # type: ignore
+            selectinload(Facture.statut_ref),  # type: ignore
+        )
     )
     result = await session.exec(statement)
     db_facture = result.first()
@@ -320,6 +326,9 @@ async def get_facture(
         )
 
     facture_read = FactureReadWithLignes.model_validate(db_facture)
+    # Référentiel incohérent (statut orphelin) : null plutôt qu'un 500.
+    statut_ref = db_facture.statut_ref
+    facture_read.libelle_statut = statut_ref.libelle if statut_ref is not None else None
 
     result_extraction = await session.exec(
         select(ExtractionOcr)
@@ -382,8 +391,7 @@ async def download_facturx(
             detail="Facture introuvable dans cet espace entreprise",
         )
 
-    statut = db_facture.statut_ref
-    if statut is None or statut.libelle.strip().lower() == "brouillon":
+    if not est_emise(db_facture.statut_ref):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Le fichier Factur-X n'est disponible que pour une facture "
@@ -429,6 +437,11 @@ async def facturx_conformity_report(
     (la génération refuserait avec les mêmes règles) ; les avertissements
     sont informatifs. Filet de sécurité avant dépôt sur la PDP.
 
+    La clé de Luhn des SIRET (codes ``seller_siret_luhn_invalid`` /
+    ``buyer_siret_luhn_invalid``) est une erreur bloquante par défaut ; si le
+    serveur relâche ce contrôle (sandbox Chorus Pro, ``SIRET_LUHN_STRICT=
+    False``), ces mêmes codes sont remontés en avertissements.
+
     Refusé (409) pour un brouillon — comme la génération, le rapport n'a de
     sens que sur des données figées à la validation.
     """
@@ -446,8 +459,7 @@ async def facturx_conformity_report(
             detail="Facture introuvable dans cet espace entreprise",
         )
 
-    statut = db_facture.statut_ref
-    if statut is None or statut.libelle.strip().lower() == "brouillon":
+    if not est_emise(db_facture.statut_ref):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Le rapport de conformité Factur-X n'est disponible que "
@@ -512,8 +524,7 @@ async def transmettre_choruspro(
             detail="Facture introuvable dans cet espace entreprise",
         )
 
-    statut = db_facture.statut_ref
-    if statut is None or statut.libelle.strip().lower() == "brouillon":
+    if not est_emise(db_facture.statut_ref):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Seule une facture validée peut être transmise à Chorus Pro. "
@@ -642,7 +653,8 @@ async def update_brouillon_endpoint(
 ) -> Any:
     """
     Modifie un brouillon de facture : champs d'en-tête et, si fournies,
-    remplacement complet des lignes (totaux recalculés).
+    remplacement complet des lignes. Les totaux HT/TVA/TTC sont recalculés
+    depuis les lignes à chaque modification.
 
     Seuls les brouillons sont modifiables : toute tentative sur une facture
     validée est refusée (409, inaltérabilité légale).
@@ -759,9 +771,13 @@ async def generer_avoir_endpoint(
     id_entreprise: TenantDep,
 ) -> Any:
     """
-    Génère un avoir (en brouillon) à partir d'une facture validée.
+    Génère un avoir (en brouillon) à partir d'une facture émise.
 
-    Refusé (409) si la facture source n'est pas au statut 'Validée'.
+    Toute facture émise (famille non-brouillon : validée, payée, en retard,
+    déposée PDP, rejetée PDP…) peut faire l'objet d'un avoir — seul moyen
+    légal de corriger une facture inaltérable. Refusé (409) pour un
+    brouillon (à valider d'abord), une facture annulée (déjà annulée par
+    un avoir) ou un avoir (pas d'avoir d'avoir).
     """
     try:
         if current_user.id is None:

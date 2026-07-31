@@ -10,6 +10,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.clients.models import Client
+from src.core.crypto import is_masked
 from src.documents.models import ExtractionOcr
 from src.entreprises.models import Entreprise
 from src.factures.exceptions import (
@@ -30,6 +31,26 @@ from src.factures.models import (
     TypeFacture,
 )
 from src.factures.schemas import FactureCreate, FactureLigneCreate, FactureUpdate
+from src.factures.statuts import est_annulee, est_brouillon, est_emise
+
+
+def _resync_totaux(db_facture: Facture, lignes: Sequence[FactureLigne]) -> None:
+    """
+    Aligne les totaux HT/TVA/TTC de la facture sur la somme des lignes.
+
+    Invariant d'un brouillon : les totaux dérivent toujours des montants des
+    lignes, jamais d'une saisie directe. Appelé après tout calcul de lignes
+    et à chaque édition d'en-tête (défense en profondeur : un brouillon aux
+    totaux divergents redevient cohérent au premier PATCH).
+    """
+    centime = Decimal("0.01")
+    total_ht = sum((ligne.montant_ht for ligne in lignes), Decimal("0"))
+    total_tva = sum((ligne.montant_tva for ligne in lignes), Decimal("0"))
+    db_facture.total_ht = total_ht.quantize(centime, rounding=ROUND_HALF_UP)
+    db_facture.total_tva = total_tva.quantize(centime, rounding=ROUND_HALF_UP)
+    db_facture.total_ttc = (total_ht + total_tva).quantize(
+        centime, rounding=ROUND_HALF_UP
+    )
 
 
 async def _apply_lignes(
@@ -50,9 +71,8 @@ async def _apply_lignes(
     result_taux = await session.exec(statement_taux)
     taux_map = {taux.id: taux for taux in result_taux.all()}
 
-    total_ht_global = Decimal("0.00")
-    total_tva_global = Decimal("0.00")
     centime = Decimal("0.01")
+    nouvelles_lignes: list[FactureLigne] = []
 
     for index, ligne_in in enumerate(lignes_in):
         taux_db = taux_map.get(ligne_in.id_taux_tva)
@@ -85,15 +105,9 @@ async def _apply_lignes(
             montant_ttc=montant_ttc,
         )
         session.add(db_ligne)
+        nouvelles_lignes.append(db_ligne)
 
-        total_ht_global += montant_ht
-        total_tva_global += montant_tva
-
-    db_facture.total_ht = total_ht_global.quantize(centime, rounding=ROUND_HALF_UP)
-    db_facture.total_tva = total_tva_global.quantize(centime, rounding=ROUND_HALF_UP)
-    db_facture.total_ttc = (total_ht_global + total_tva_global).quantize(
-        centime, rounding=ROUND_HALF_UP
-    )
+    _resync_totaux(db_facture, nouvelles_lignes)
 
 
 async def create_facture_brouillon(
@@ -169,7 +183,8 @@ async def update_facture_brouillon(
 ) -> Facture:
     """
     Met à jour un brouillon de facture : champs d'en-tête et, si fournies,
-    remplacement complet des lignes avec recalcul des totaux.
+    remplacement complet des lignes. Les totaux sont resynchronisés depuis
+    les lignes à chaque appel, avec ou sans remplacement.
 
     Seuls les brouillons sont modifiables : une facture validée est
     immuable (inaltérabilité légale).
@@ -190,7 +205,7 @@ async def update_facture_brouillon(
     if db_facture is None:
         raise FactureNotFoundError("Facture introuvable dans cet espace entreprise")
 
-    if db_facture.statut_ref is None or db_facture.statut_ref.libelle != "Brouillon":
+    if not est_brouillon(db_facture.statut_ref):
         statut_actuel = (
             db_facture.statut_ref.libelle if db_facture.statut_ref else "Inconnu"
         )
@@ -201,6 +216,12 @@ async def update_facture_brouillon(
 
     # 2. Mise à jour de l'en-tête (seuls les champs envoyés sont modifiés)
     donnees = facture_in.model_dump(exclude_unset=True, exclude={"lignes"})
+
+    # L'API renvoie l'IBAN masqué en lecture : si le front réexpédie ce masque
+    # tel quel, il vaut « inchangé » — il ne doit pas écraser la vraie valeur.
+    iban_recu = donnees.get("iban")
+    if isinstance(iban_recu, str) and is_masked(iban_recu):
+        donnees.pop("iban")
 
     # Cohérence comptable : un avoir lié à une facture d'origine
     # ne peut pas changer de type.
@@ -216,12 +237,17 @@ async def update_facture_brouillon(
     for champ, valeur in donnees.items():
         setattr(db_facture, champ, valeur)
 
-    # 3. Remplacement complet des lignes si le payload en fournit
+    # 3. Remplacement complet des lignes si le payload en fournit ; sinon,
+    # resynchronisation des totaux depuis les lignes existantes (défense en
+    # profondeur : l'invariant « totaux = somme des lignes » tient après
+    # chaque PATCH, même d'en-tête seul).
     if facture_in.lignes is not None:
         for ancienne_ligne in list(db_facture.lignes):
             await session.delete(ancienne_ligne)
         await session.flush()
         await _apply_lignes(session, db_facture, facture_in.lignes)
+    else:
+        _resync_totaux(db_facture, db_facture.lignes)
 
     await session.commit()
 
@@ -272,7 +298,7 @@ async def delete_facture_brouillon(
     if db_facture is None:
         raise FactureNotFoundError("Facture introuvable dans cet espace entreprise")
 
-    if db_facture.statut_ref is None or db_facture.statut_ref.libelle != "Brouillon":
+    if not est_brouillon(db_facture.statut_ref):
         statut_actuel = (
             db_facture.statut_ref.libelle if db_facture.statut_ref else "Inconnu"
         )
@@ -384,7 +410,7 @@ async def _valider_facture_tentative(
             f"Facture ID {facture_id} introuvable pour cette entreprise."
         )
 
-    if db_facture.statut_ref is None or db_facture.statut_ref.libelle != "Brouillon":
+    if not est_brouillon(db_facture.statut_ref):
         statut_actuel = (
             db_facture.statut_ref.libelle if db_facture.statut_ref else "Inconnu"
         )
@@ -497,7 +523,14 @@ async def generer_avoir_brouillon(
     id_createur: int,
 ) -> Facture:
     """
-    Génère un brouillon d'avoir à partir d'une facture validée existante.
+    Génère un brouillon d'avoir à partir d'une facture émise existante.
+
+    Toute facture émise (famille non-brouillon : validée, payée, en retard,
+    statuts PDP…) peut faire l'objet d'un avoir — c'est le seul moyen légal
+    de corriger une facture inaltérable, y compris après un rejet PDP.
+    Deux exclusions : une facture annulée (déjà annulée par un avoir, un
+    second créerait un double crédit) et un avoir (re-négativer les montants
+    n'a pas de sens comptable).
     """
     # 1. Récupérer la facture d'origine avec ses lignes
     stmt_origine = (
@@ -516,12 +549,22 @@ async def generer_avoir_brouillon(
             "Facture d'origine introuvable pour cette entreprise."
         )
 
-    if (
-        facture_origine.statut_ref is None
-        or facture_origine.statut_ref.libelle != "Validée"
-    ):
+    if facture_origine.type_facture == TypeFacture.AVOIR:
         raise TransitionStatutInvalideError(
-            "Seule une facture au statut 'Validée' peut faire l'objet d'un avoir."
+            "Impossible de générer un avoir à partir d'un avoir. Pour "
+            "corriger un avoir erroné, émettez une nouvelle facture."
+        )
+
+    if not est_emise(facture_origine.statut_ref):
+        raise TransitionStatutInvalideError(
+            "Impossible de générer un avoir depuis un brouillon. "
+            "Validez d'abord la facture."
+        )
+
+    if est_annulee(facture_origine.statut_ref):
+        raise TransitionStatutInvalideError(
+            "Cette facture est déjà annulée par un avoir : "
+            "impossible d'en générer un nouveau."
         )
 
     # 2. Récupérer le statut Brouillon
