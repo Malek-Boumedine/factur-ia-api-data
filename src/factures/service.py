@@ -34,6 +34,25 @@ from src.factures.schemas import FactureCreate, FactureLigneCreate, FactureUpdat
 from src.factures.statuts import est_annulee, est_brouillon, est_emise
 
 
+def _resync_totaux(db_facture: Facture, lignes: Sequence[FactureLigne]) -> None:
+    """
+    Aligne les totaux HT/TVA/TTC de la facture sur la somme des lignes.
+
+    Invariant d'un brouillon : les totaux dérivent toujours des montants des
+    lignes, jamais d'une saisie directe. Appelé après tout calcul de lignes
+    et à chaque édition d'en-tête (défense en profondeur : un brouillon aux
+    totaux divergents redevient cohérent au premier PATCH).
+    """
+    centime = Decimal("0.01")
+    total_ht = sum((ligne.montant_ht for ligne in lignes), Decimal("0"))
+    total_tva = sum((ligne.montant_tva for ligne in lignes), Decimal("0"))
+    db_facture.total_ht = total_ht.quantize(centime, rounding=ROUND_HALF_UP)
+    db_facture.total_tva = total_tva.quantize(centime, rounding=ROUND_HALF_UP)
+    db_facture.total_ttc = (total_ht + total_tva).quantize(
+        centime, rounding=ROUND_HALF_UP
+    )
+
+
 async def _apply_lignes(
     session: AsyncSession,
     db_facture: Facture,
@@ -52,9 +71,8 @@ async def _apply_lignes(
     result_taux = await session.exec(statement_taux)
     taux_map = {taux.id: taux for taux in result_taux.all()}
 
-    total_ht_global = Decimal("0.00")
-    total_tva_global = Decimal("0.00")
     centime = Decimal("0.01")
+    nouvelles_lignes: list[FactureLigne] = []
 
     for index, ligne_in in enumerate(lignes_in):
         taux_db = taux_map.get(ligne_in.id_taux_tva)
@@ -87,15 +105,9 @@ async def _apply_lignes(
             montant_ttc=montant_ttc,
         )
         session.add(db_ligne)
+        nouvelles_lignes.append(db_ligne)
 
-        total_ht_global += montant_ht
-        total_tva_global += montant_tva
-
-    db_facture.total_ht = total_ht_global.quantize(centime, rounding=ROUND_HALF_UP)
-    db_facture.total_tva = total_tva_global.quantize(centime, rounding=ROUND_HALF_UP)
-    db_facture.total_ttc = (total_ht_global + total_tva_global).quantize(
-        centime, rounding=ROUND_HALF_UP
-    )
+    _resync_totaux(db_facture, nouvelles_lignes)
 
 
 async def create_facture_brouillon(
@@ -171,7 +183,8 @@ async def update_facture_brouillon(
 ) -> Facture:
     """
     Met à jour un brouillon de facture : champs d'en-tête et, si fournies,
-    remplacement complet des lignes avec recalcul des totaux.
+    remplacement complet des lignes. Les totaux sont resynchronisés depuis
+    les lignes à chaque appel, avec ou sans remplacement.
 
     Seuls les brouillons sont modifiables : une facture validée est
     immuable (inaltérabilité légale).
@@ -224,12 +237,17 @@ async def update_facture_brouillon(
     for champ, valeur in donnees.items():
         setattr(db_facture, champ, valeur)
 
-    # 3. Remplacement complet des lignes si le payload en fournit
+    # 3. Remplacement complet des lignes si le payload en fournit ; sinon,
+    # resynchronisation des totaux depuis les lignes existantes (défense en
+    # profondeur : l'invariant « totaux = somme des lignes » tient après
+    # chaque PATCH, même d'en-tête seul).
     if facture_in.lignes is not None:
         for ancienne_ligne in list(db_facture.lignes):
             await session.delete(ancienne_ligne)
         await session.flush()
         await _apply_lignes(session, db_facture, facture_in.lignes)
+    else:
+        _resync_totaux(db_facture, db_facture.lignes)
 
     await session.commit()
 

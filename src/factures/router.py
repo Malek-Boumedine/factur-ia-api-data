@@ -653,7 +653,8 @@ async def update_brouillon_endpoint(
 ) -> Any:
     """
     Modifie un brouillon de facture : champs d'en-tête et, si fournies,
-    remplacement complet des lignes (totaux recalculés).
+    remplacement complet des lignes. Les totaux HT/TVA/TTC sont recalculés
+    depuis les lignes à chaque modification.
 
     Seuls les brouillons sont modifiables : toute tentative sur une facture
     validée est refusée (409, inaltérabilité légale).
