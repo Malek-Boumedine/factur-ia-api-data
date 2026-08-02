@@ -96,4 +96,26 @@ Jamais capturé (garanties posées dans `src/core/telemetry.py`) :
 - **paramètres SQL** : `db.statement` ne contient que la requête avec placeholders, jamais les valeurs liées (IBAN, emails…) ;
 - **query strings d'URL** : retirées des spans par hooks de scrubbing (le client SIRENE appelle `/search?q=<SIRET>` — le SIRET ne fuit pas dans les traces).
 
-`/health`, `/ready` et `/` sont exclues du tracing (sondes Cloud Run appelées en continu : aucun intérêt, coût en volume).
+`/health`, `/ready`, `/metrics` et `/` sont exclues du tracing (sondes Cloud Run et scrape Prometheus en continu : aucun intérêt, coût en volume).
+
+## Métriques (Prometheus / Grafana)
+
+Les mêmes instrumentations OpenTelemetry produisent aussi des **métriques** (débit, latence, erreurs, appels sortants, pool DB), exposées au format Prometheus sur `GET /metrics` — sans Collector, via `PrometheusMetricReader`. Interrupteur séparé des traces : `OTEL_METRICS_ENABLED` (défaut `False`, rien ne change si désactivé). Les quatre combinaisons traces/métriques sont indépendantes.
+
+**`/metrics` ne doit jamais être public en production** : ne pas activer `OTEL_METRICS_ENABLED` sur Cloud Run (les métriques y passeraient par un sidecar/Cloud Monitoring) ; si un jour c'est nécessaire, restreindre l'accès par ingress/IAM. C'est un outil de dev local.
+
+### Lancer la stack locale
+
+```bash
+# 1. l'API sur l'hôte, métriques activées :
+OTEL_METRICS_ENABLED=True uv run uvicorn src.main:app --reload
+
+# 2. Prometheus + Grafana (stack autonome, séparée du compose MySQL) :
+docker compose -f docker-compose.observability.yml up -d
+```
+
+- **Grafana** : http://localhost:3000 — accès anonyme (dev), datasource Prometheus et dashboard « Factur-IA API » pré-provisionnés (`observability/grafana/`). Panneaux : débit par route, latence p50/p95/p99, taux d'erreur 4xx/5xx, requêtes en vol, débit et latence des appels sortants par hôte (SIRENE, API IA, Chorus Pro), pool de connexions DB.
+- **Prometheus** : http://localhost:9090 — scrape l'API toutes les 15 s sur `host.docker.internal:8000` (config : `observability/prometheus/prometheus.yml` ; adapter le port si uvicorn n'écoute pas sur 8000).
+- Vérification rapide sans Docker : `curl localhost:8000/metrics` doit répondre au format texte Prometheus.
+
+Limites assumées : les labels sont templatés et à cardinalité bornée (`http_route="/clients/{id_client}"`, jamais d'ID réel ni de query string) ; la latence *par requête SQL* n'existe pas en métrique (l'instrumentation SQLAlchemy n'expose que le pool de connexions) — elle relève des traces.

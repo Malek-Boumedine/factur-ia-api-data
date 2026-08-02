@@ -1,0 +1,11 @@
+# Configuration Prometheus de la stack locale d'observabilité.
+# Scrape l'endpoint /metrics de l'API (qui tourne sur l'hôte, port 8000,
+# avec OTEL_METRICS_ENABLED=True).
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: factur-ia-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]

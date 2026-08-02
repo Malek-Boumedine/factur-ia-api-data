@@ -7,6 +7,7 @@ mémoire (jamais exportés).
 
 from typing import Any
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from opentelemetry.sdk.trace import TracerProvider
@@ -41,10 +42,11 @@ def make_recorded_span(
 
 
 class TestSetupTelemetryDesactive:
-    """Désactivée (défaut), l'instrumentation doit être invisible."""
+    """Tout désactivé (défaut), l'instrumentation doit être invisible."""
 
     def test_aucun_middleware_ajoute(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(settings, "OTEL_ENABLED", False)
+        monkeypatch.setattr(settings, "OTEL_METRICS_ENABLED", False)
         app = FastAPI()
         middlewares_avant = list(app.user_middleware)
 
@@ -57,11 +59,21 @@ class TestSetupTelemetryDesactive:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(settings, "OTEL_ENABLED", False)
+        monkeypatch.setattr(settings, "OTEL_METRICS_ENABLED", False)
         app = FastAPI()
 
         setup_telemetry(app)
 
         assert not getattr(app, "_is_instrumented_by_opentelemetry", False)
+
+    def test_aucune_route_metrics(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(settings, "OTEL_ENABLED", False)
+        monkeypatch.setattr(settings, "OTEL_METRICS_ENABLED", False)
+        app = FastAPI()
+
+        setup_telemetry(app)
+
+        assert all(getattr(r, "path", None) != "/metrics" for r in app.routes)
 
 
 class TestScrubUrl:
@@ -165,7 +177,8 @@ class TestHooks:
 
 
 class TestUrlsExclues:
-    """/health, /ready et la racine sont hors tracing ; les routes métier non.
+    """/health, /ready, /metrics et la racine sont hors tracing ; les routes
+    métier non.
 
     Les URLs testées reproduisent le format vu par le middleware ASGI :
     « scheme://host/chemin », sans query string.
@@ -176,6 +189,7 @@ class TestUrlsExclues:
         [
             "http://testserver/health",
             "http://testserver/ready",
+            "http://testserver/metrics",
             "http://testserver/",
             "https://api.factur-ia.fr/",
         ],
@@ -190,6 +204,7 @@ class TestUrlsExclues:
             "http://testserver/factures/12",
             "http://testserver/healthcheck",
             "http://testserver/ready-set-go",
+            "http://testserver/metrics-export",
         ],
     )
     def test_non_exclues(self, url: str) -> None:
@@ -214,6 +229,7 @@ class TestSetupTelemetryActive:
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
         monkeypatch.setattr(settings, "OTEL_ENABLED", True)
+        monkeypatch.setattr(settings, "OTEL_METRICS_ENABLED", False)
         monkeypatch.setattr(settings, "OTEL_TRACES_EXPORTER", "console")
         app = FastAPI()
 
@@ -221,6 +237,98 @@ class TestSetupTelemetryActive:
             setup_telemetry(app)
             assert getattr(app, "_is_instrumented_by_opentelemetry", False)
             assert hasattr(app, "_original_build_middleware_stack")
+            # Traces seules : pas d'endpoint de métriques.
+            assert all(getattr(r, "path", None) != "/metrics" for r in app.routes)
+        finally:
+            HTTPXClientInstrumentor().uninstrument()
+            SQLAlchemyInstrumentor().uninstrument()
+            FastAPIInstrumentor.uninstrument_app(app)
+
+
+class TestMetricsEndpoint:
+    """Métriques seules activées : /metrics répond au format Prometheus, avec
+    des labels templatés sans ID réel, et les traces restent no-op.
+
+    Le mode des conventions sémantiques est mémorisé au premier instrument du
+    process : on force sa relecture pour obtenir les conventions stables
+    (label http_route), comme au démarrage réel de l'app.
+    """
+
+    async def test_metrics_exposees_labels_templates(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from opentelemetry.instrumentation._semconv import (
+            _OpenTelemetrySemanticConventionStability,
+        )
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        monkeypatch.setattr(settings, "OTEL_ENABLED", False)
+        monkeypatch.setattr(settings, "OTEL_METRICS_ENABLED", True)
+        monkeypatch.setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "http")
+        monkeypatch.setattr(
+            _OpenTelemetrySemanticConventionStability, "_initialized", False
+        )
+
+        app = FastAPI()
+
+        @app.get("/clients/{id_client}")
+        async def get_client(id_client: int) -> dict[str, int]:
+            return {"id": id_client}
+
+        try:
+            setup_telemetry(app)
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
+                reponse = await client.get("/clients/987654321")
+                assert reponse.status_code == 200
+                metrics = await client.get("/metrics")
+
+            assert metrics.status_code == 200
+            assert metrics.headers["content-type"].startswith("text/plain")
+            corps = metrics.text
+            # Histogramme HTTP présent, labellé par la route templatée.
+            assert "http_server_request_duration_seconds" in corps
+            assert 'http_route="/clients/{id_client}"' in corps
+            # Jamais l'identifiant réel dans les labels.
+            assert "987654321" not in corps
+        finally:
+            HTTPXClientInstrumentor().uninstrument()
+            SQLAlchemyInstrumentor().uninstrument()
+            FastAPIInstrumentor.uninstrument_app(app)
+
+    async def test_scrape_de_metrics_non_compte(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Le scrape de /metrics ne doit pas alimenter ses propres compteurs."""
+        from opentelemetry.instrumentation._semconv import (
+            _OpenTelemetrySemanticConventionStability,
+        )
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        monkeypatch.setattr(settings, "OTEL_ENABLED", False)
+        monkeypatch.setattr(settings, "OTEL_METRICS_ENABLED", True)
+        monkeypatch.setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "http")
+        monkeypatch.setattr(
+            _OpenTelemetrySemanticConventionStability, "_initialized", False
+        )
+        app = FastAPI()
+
+        try:
+            setup_telemetry(app)
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
+                await client.get("/metrics")
+                metrics = await client.get("/metrics")
+
+            assert 'http_route="/metrics"' not in metrics.text
         finally:
             HTTPXClientInstrumentor().uninstrument()
             SQLAlchemyInstrumentor().uninstrument()
