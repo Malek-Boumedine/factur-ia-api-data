@@ -19,6 +19,7 @@ from src.clients.router import router as clients_router
 from src.core.config import settings
 from src.core.database import get_session
 from src.core.rate_limit import limiter
+from src.core.telemetry import setup_telemetry
 from src.documents.router import router as documents_router
 from src.entreprises.router import router as entreprises_router
 from src.factures.router import router as factures_router
@@ -83,6 +84,9 @@ def get_application() -> FastAPI:
     # d'inclusion, et ajouter ce module en fin de liste garde les entrées
     # existantes à leur place (diff de `contracts/openapi.json` purement additif).
     _app.include_router(administration_router)
+
+    # Tracing OpenTelemetry — no-op si OTEL_ENABLED est faux.
+    setup_telemetry(_app)
 
     return _app
 

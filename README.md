@@ -53,3 +53,47 @@ gcloud run jobs execute factur-ia-migrate --wait
 1. **`uploads/` est éphémère sur Cloud Run** : les documents uploadés sont écrits sur le disque local du conteneur (système de fichiers en mémoire), et **perdus au recyclage de l'instance**. À migrer vers un stockage objet (GCS) — tâche de production à part entière.
 2. **`API_HOST` / `API_PORT` sont requises par `Settings`** (`src/core/config.py`) alors qu'uvicorn ne les lit pas dans le conteneur (il écoute sur `$PORT`). Les fournir quand même au runtime, sinon l'application refuse de démarrer.
 3. **CORS** : `allow_origins=["*"]` dans `src/main.py` — à restreindre avant toute exposition publique.
+
+## Observabilité (OpenTelemetry)
+
+Traces distribuées des requêtes HTTP entrantes (FastAPI), des requêtes SQL (SQLAlchemy) et des appels sortants httpx (SIRENE, API IA, Chorus Pro). **Désactivé par défaut** : sans activation explicite, rien n'est instrumenté — local et CI inchangés. L'initialisation vit dans `src/core/telemetry.py`.
+
+### Activer
+
+```bash
+OTEL_ENABLED="True"
+OTEL_SERVICE_NAME="factur-ia-api"                      # nom du service dans les traces
+OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318"    # collector OTLP/HTTP
+# échantillonnage en production (optionnel, défaut : tout tracer) :
+# OTEL_TRACES_SAMPLER="parentbased_traceidratio"
+# OTEL_TRACES_SAMPLER_ARG="0.1"
+```
+
+Un collector injoignable ne fait jamais tomber l'API : l'export part d'un thread de fond et échoue en silence.
+
+### Vérifier en local sans collector
+
+```bash
+OTEL_ENABLED=True OTEL_TRACES_EXPORTER=console uv run uvicorn src.main:app
+```
+
+Les spans s'impriment en JSON dans la console à chaque requête. Pour une visualisation complète, un Jaeger local suffit :
+
+```bash
+docker run --rm -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one
+# puis OTEL_ENABLED=True OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+# et l'UI sur http://localhost:16686
+```
+
+### Ce que les spans contiennent — et surtout pas
+
+Capturé : méthode HTTP, route templatée (`/clients/{id_client}`, jamais l'identifiant réel), code de statut, durée, hôte et chemin des appels sortants, opération SQL avec placeholders, contexte de trace.
+
+Jamais capturé (garanties posées dans `src/core/telemetry.py`) :
+
+- **headers** (`Authorization`, `cpro-account`, `X-OCR-Secret-Token`, `x-entreprise-id`) : capture désactivée — ne jamais définir les variables `OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_*` ;
+- **corps de requête/réponse** (non supporté par les instrumentations utilisées) ;
+- **paramètres SQL** : `db.statement` ne contient que la requête avec placeholders, jamais les valeurs liées (IBAN, emails…) ;
+- **query strings d'URL** : retirées des spans par hooks de scrubbing (le client SIRENE appelle `/search?q=<SIRET>` — le SIRET ne fuit pas dans les traces).
+
+`/health`, `/ready` et `/` sont exclues du tracing (sondes Cloud Run appelées en continu : aucun intérêt, coût en volume).

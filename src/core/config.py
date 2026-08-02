@@ -60,6 +60,20 @@ class Settings(BaseSettings):
     # contrôle, qui est alors signalée en simple avertissement.
     SIRET_LUHN_STRICT: bool = True
 
+    # OBSERVABILITÉ — OpenTelemetry (traces distribuées).
+    # OTEL_ENABLED est l'interrupteur maître, désactivé par défaut : rien
+    # n'est instrumenté en local ni en CI. (Nom maison : la variable standard
+    # OTEL_SDK_DISABLED a une sémantique inversée avec défaut = activé.)
+    # Les autres variables suivent les conventions standard OpenTelemetry ;
+    # le SDK les lit dans os.environ, pas dans le .env — setup_telemetry les
+    # y relaie, l'environnement réel restant prioritaire.
+    OTEL_ENABLED: bool = False
+    OTEL_SERVICE_NAME: str = "factur-ia-api"
+    OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
+    OTEL_TRACES_EXPORTER: str = "otlp"
+    OTEL_TRACES_SAMPLER: str | None = None
+    OTEL_TRACES_SAMPLER_ARG: str | None = None
+
     # RÉINITIALISATION DE MOT DE PASSE
     # Valeurs par défaut fournies pour ne pas bloquer le démarrage ;
     # à surcharger via l'environnement en production.
