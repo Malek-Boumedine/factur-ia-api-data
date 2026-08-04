@@ -45,7 +45,7 @@ placeholders, nom du service, contexte de trace.
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import FastAPI
@@ -53,9 +53,19 @@ from fastapi import FastAPI
 from src.core.config import settings
 
 if TYPE_CHECKING:
+    from opentelemetry.metrics import Counter
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.trace import Span
+
+# Les trois dépendances externes de l'API, seules valeurs admises du label
+# `service` du compteur d'indisponibilité : cardinalité bornée, aucun ID réel.
+ExternalService = Literal["sirene", "ia_api", "chorus_pro"]
+
+# Compteur des échecs de connexion aux services externes, créé par
+# `_build_meter_provider` quand les métriques sont activées ; sinon None et
+# `record_external_api_unavailable` ne fait rien.
+_external_api_unavailable_counter: "Counter | None" = None
 
 # Sondes Cloud Run appelées en continu (/health, /ready), page d'accueil et
 # endpoint Prometheus (/metrics, scrapé toutes les 15 s) : aucune valeur
@@ -99,6 +109,21 @@ def scrub_span_url_attributes(span: "Span") -> None:
             span.set_attribute(key, scrub_url(value))
     if "url.query" in attributes:
         span.set_attribute("url.query", "")
+
+
+def record_external_api_unavailable(service: ExternalService) -> None:
+    """Compte un échec de connexion (réseau, DNS, timeout) à un service externe.
+
+    À appeler uniquement sur ``httpx.RequestError`` : les réponses 5xx sont
+    déjà enregistrées par l'instrumentation httpx, les compter ici les
+    compterait double. Nécessaire car l'instrumentation httpx n'enregistre
+    AUCUNE métrique quand la connexion échoue (l'exception est relevée avant
+    l'enregistrement de l'histogramme) : sans ce compteur, une dépendance
+    éteinte serait invisible dans les métriques et les alertes. No-op si les
+    métriques sont désactivées.
+    """
+    if _external_api_unavailable_counter is not None:
+        _external_api_unavailable_counter.add(1, {"service": service})
 
 
 def _server_request_hook(span: "Span", scope: dict[str, Any]) -> None:
@@ -175,11 +200,23 @@ def _build_meter_provider(app: FastAPI) -> "MeterProvider":
         generate_latest,
     )
 
+    global _external_api_unavailable_counter
+
     registry = CollectorRegistry()
     reader = PrometheusMetricReader(registry=registry)
     provider = MeterProvider(
         resource=Resource.create({"service.name": settings.OTEL_SERVICE_NAME}),
         metric_readers=[reader],
+    )
+
+    # Exposé côté Prometheus sous le nom `external_api_unavailable_total`.
+    meter = provider.get_meter("src.core.telemetry")
+    _external_api_unavailable_counter = meter.create_counter(
+        "external_api.unavailable",
+        unit="1",
+        description=(
+            "Échecs de connexion aux services externes (SIRENE, API IA, Chorus Pro)"
+        ),
     )
 
     def metrics_endpoint() -> Response:

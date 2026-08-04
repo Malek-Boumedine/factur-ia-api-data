@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 import pytest
+import src.core.telemetry as telemetry
 from fastapi import FastAPI
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -23,6 +24,7 @@ from src.core.telemetry import (
     _async_client_request_hook,
     _client_request_hook,
     _server_request_hook,
+    record_external_api_unavailable,
     scrub_span_url_attributes,
     scrub_url,
     setup_telemetry,
@@ -296,6 +298,38 @@ class TestMetricsEndpoint:
             # Jamais l'identifiant réel dans les labels.
             assert "987654321" not in corps
         finally:
+            HTTPXClientInstrumentor().uninstrument()
+            SQLAlchemyInstrumentor().uninstrument()
+            FastAPIInstrumentor.uninstrument_app(app)
+
+    async def test_compteur_indisponibilite_expose(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Le compteur d'indisponibilité des services externes est créé avec
+        les métriques et exposé sur /metrics avec son label `service`."""
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        monkeypatch.setattr(settings, "OTEL_ENABLED", False)
+        monkeypatch.setattr(settings, "OTEL_METRICS_ENABLED", True)
+        app = FastAPI()
+
+        try:
+            setup_telemetry(app)
+            record_external_api_unavailable("sirene")
+
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
+                metrics = await client.get("/metrics")
+
+            corps = metrics.text
+            assert "external_api_unavailable_total" in corps
+            assert 'service="sirene"' in corps
+        finally:
+            telemetry._external_api_unavailable_counter = None
             HTTPXClientInstrumentor().uninstrument()
             SQLAlchemyInstrumentor().uninstrument()
             FastAPIInstrumentor.uninstrument_app(app)

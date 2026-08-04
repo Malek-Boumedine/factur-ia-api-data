@@ -151,8 +151,26 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (state) (db_client_connections_usage)",
+          "expr": "sum by (state) (db_client_connections_usage_connections)",
           "legendFormat": "{{state}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Appels sortants — échecs de connexion (par seconde)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service) (rate(external_api_unavailable_total[$__rate_interval]))",
+          "legendFormat": "{{service}}"
         }
       ]
     }
