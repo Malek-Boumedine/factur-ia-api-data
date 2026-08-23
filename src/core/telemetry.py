@@ -12,7 +12,7 @@ instrumentation), aucun changement de comportement en local ou en CI :
 - ``OTEL_METRICS_ENABLED`` : **métriques** des mêmes instrumentations
   (histogrammes de durée HTTP entrant/sortant, requêtes en vol, pool de
   connexions DB), exposées au format Prometheus sur ``/metrics`` — scrapé par
-  la stack locale ``docker-compose.observability.yml``. En production,
+  la stack d'observabilité du dépôt ``factur-ia-infra``. En production,
   ``/metrics`` ne doit pas être public : ne pas activer sur Cloud Run.
 
 Les conventions sémantiques HTTP *stables* sont adoptées via la variable

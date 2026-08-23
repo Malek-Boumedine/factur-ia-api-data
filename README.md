@@ -98,70 +98,20 @@ Jamais capturé (garanties posées dans `src/core/telemetry.py`) :
 
 `/health`, `/ready`, `/metrics` et `/` sont exclues du tracing (sondes Cloud Run et scrape Prometheus en continu : aucun intérêt, coût en volume).
 
-## Métriques (Prometheus / Grafana)
+## Métriques (Prometheus)
 
 Les mêmes instrumentations OpenTelemetry produisent aussi des **métriques** (débit, latence, erreurs, appels sortants, pool DB), exposées au format Prometheus sur `GET /metrics` — sans Collector, via `PrometheusMetricReader`. Interrupteur séparé des traces : `OTEL_METRICS_ENABLED` (défaut `False`, rien ne change si désactivé). Les quatre combinaisons traces/métriques sont indépendantes.
 
 **`/metrics` ne doit jamais être public en production** : ne pas activer `OTEL_METRICS_ENABLED` sur Cloud Run (les métriques y passeraient par un sidecar/Cloud Monitoring) ; si un jour c'est nécessaire, restreindre l'accès par ingress/IAM. C'est un outil de dev local.
 
-### Lancer la stack locale
-
-```bash
-# 1. l'API sur l'hôte, métriques activées :
-OTEL_METRICS_ENABLED=True uv run uvicorn src.main:app --reload
-
-# 2. Prometheus + Grafana (stack autonome, séparée du compose MySQL) :
-docker compose -f docker-compose.observability.yml up -d
-```
-
-- **Grafana** : http://localhost:3000 — accès anonyme (dev), datasource Prometheus et dashboard « Factur-IA API » pré-provisionnés (`observability/grafana/`). Panneaux : débit par route, latence p50/p95/p99, taux d'erreur 4xx/5xx, requêtes en vol, débit et latence des appels sortants par hôte (SIRENE, API IA, Chorus Pro), pool de connexions DB.
-- **Prometheus** : http://localhost:9090 — scrape l'API toutes les 15 s sur `host.docker.internal:8000` (config : `observability/prometheus/prometheus.yml` ; adapter le port si uvicorn n'écoute pas sur 8000).
-- Vérification rapide sans Docker : `curl localhost:8000/metrics` doit répondre au format texte Prometheus.
+Vérification rapide : lancer l'API avec `OTEL_METRICS_ENABLED=True uv run uvicorn src.main:app --reload`, puis `curl localhost:8000/metrics` doit répondre au format texte Prometheus.
 
 Limites assumées : les labels sont templatés et à cardinalité bornée (`http_route="/clients/{id_client}"`, jamais d'ID réel ni de query string) ; la latence *par requête SQL* n'existe pas en métrique (l'instrumentation SQLAlchemy n'expose que le pool de connexions) — elle relève des traces.
 
-### Alertes et seuils
+### Stack de visualisation
 
-Provisionnées dans Grafana (`observability/grafana/provisioning/alerting/alertes.yml`), sans Alertmanager : une brique de moins, et l'état Normal / Pending / Firing est visible directement dans **Alerting → Alert rules**. Chaque règle mesure sur une fenêtre de 5 min, est évaluée chaque minute, et ne passe en Firing que si la condition tient 2 min (`for:`) — un pic isolé d'une seule évaluation ne déclenche rien.
+Ce dépôt ne fait que **produire** les métriques. La stack qui les scrape et les visualise (Prometheus, Grafana, dashboard, règles d'alerte) vit dans le dépôt d'infrastructure [factur-ia-infra](https://github.com/Malek-Boumedine/factur-ia-infra) : une stack unifiée qui scrape les trois services du projet. On y trouve aussi les seuils d'alerte, leur raisonnement et les procédures de démonstration (Pending → Firing).
 
-| Alerte | Seuil | Durée avant Firing | Sévérité |
-| --- | --- | --- | --- |
-| API — taux de 5xx élevé | > 5 % des réponses sur 5 min | 2 min | warning |
-| API — latence p95 dégradée | > 2 s sur 5 min | 2 min | warning |
-| Dépendances externes — appels en erreur (5xx + échecs de connexion) | > 20 % des appels sortants sur 5 min | 2 min | critical |
-| Pool DB — saturation | > 12 connexions utilisées (80 % de la capacité) | 2 min | warning |
-| API hors ligne | cible Prometheus down | 2 min | critical |
+Couplage à connaître : le seuil de l'alerte « Pool DB — saturation » (12 connexions) est dérivé de la config SQLAlchemy de **ce** service (`pool_size` 5 + `max_overflow` 10 = 15, défauts non surchargés dans `core/database.py` ; 12 = 80 %). Modifier le pool ici impacte une règle définie dans `factur-ia-infra` — mettre les deux à jour ensemble.
 
-Raisonnement des seuils :
-
-- **5 % de 5xx** : en régime normal le taux est ~0 ; 5 % ne se franchit pas par accident dès qu'il y a du trafic, mais une panne réelle (base coupée) donne ~100 %.
-- **p95 > 2 s** : une API CRUD répond en dizaines de ms ; 2 s est une dégradation indiscutable, avec une marge énorme contre les fausses alertes. Pas de démo dédiée, mais elle se déclenche dès qu'un incident ralentit réellement les réponses : observée en Firing pendant la démo « Pool DB » (les requêtes bloquées par le verrou finissent avec des durées de plusieurs dizaines de secondes), et une dépendance qui timeoute suffit aussi (l'appel SIRENE entrant attend jusqu'à 5 s).
-- **20 % d'appels sortants en échec** : tolère les échecs ponctuels et les rejeux ; une dépendance éteinte fait tendre le ratio de son trafic vers 100 %.
-- **Pool DB > 12** : capacité = `pool_size` 5 + `max_overflow` 10 = 15 (défauts SQLAlchemy, non surchargés dans `core/database.py`) ; 12 = 80 %, le signal avant que les requêtes n'attendent une connexion.
-- **API hors ligne** : `up{job="factur-ia-api"} < 1`, binaire, rien à régler. Seule règle en `noDataState: Alerting` (l'absence de donnée est le symptôme) ; les autres restent en `OK` (pas de trafic ≠ panne).
-
-Particularité à connaître : l'instrumentation httpx standard n'enregistre **aucune métrique quand la connexion échoue** (l'exception est relevée avant l'enregistrement de l'histogramme) — un service externe éteint serait invisible. Le compteur maison `external_api_unavailable_total` (label `service` : `sirene`, `ia_api`, `chorus_pro`) comble ce trou : il est incrémenté par les clients de `src/integrations/` sur chaque `httpx.RequestError` (connexion, DNS, timeout), là où l'échec est déjà loggé — et jamais sur une réponse 5xx, déjà comptée par l'instrumentation (pas de double comptage). C'est lui qui rend l'alerte « Dépendances externes » réellement utile.
-
-### Rejouer la démonstration (Pending → Firing)
-
-Démo de l'alerte « Dépendances externes » (déterministe, ~3 min) :
-
-```bash
-# 1. Stack d'observabilité + MySQL démarrés, puis l'API avec l'API IA
-#    pointée sur un port fermé (simule une API IA éteinte) :
-IA_API_BASE_URL=http://localhost:9999 OTEL_METRICS_ENABLED=True \
-  uv run uvicorn src.main:app
-
-# 2. Générer du trafic sortant : uploader plusieurs fois un document
-#    (chaque upload tente le déclenchement OCR → échec de connexion compté).
-#    Répéter ~1 fois toutes les 10-15 s pendant 3 min.
-
-# 3. Observer : Grafana → Alerting → Alert rules →
-#    « Dépendances externes — appels en erreur » passe Normal → Pending →
-#    Firing (~3 min). Le panel « Appels sortants — échecs de connexion »
-#    du dashboard montre la dépendance en cause (label service).
-```
-
-Autres démonstrations : arrêter uvicorn → « API hors ligne » en Firing en ~2-3 min (et retour Normal au redémarrage) ; couper MySQL (`docker compose stop db`) en générant du trafic → « API — taux de 5xx élevé ».
-
-Pour « Pool DB — saturation », une charge de requêtes *rapides* ne suffit pas (les connexions sont rendues en quelques ms, la jauge `state="used"` reste ~0 au moment du scrape) : il faut des requêtes qui **retiennent** les connexions — le vrai scénario visé par l'alerte. Démonstration reproductible : poser un verrou exclusif (`docker exec factur_ia_db_container mysql -u… -p… factur_ia_db -e "LOCK TABLES facture WRITE; DO SLEEP(300); UNLOCK TABLES;"`) pendant une charge concurrente (~40 clients sur `/factures/`) → les SELECT s'empilent, `used` monte à 15/15 en quelques secondes, Firing en ~3 min, retour à Normal au déverrouillage.
+Particularité à connaître : l'instrumentation httpx standard n'enregistre **aucune métrique quand la connexion échoue** (l'exception est relevée avant l'enregistrement de l'histogramme) — un service externe éteint serait invisible. Le compteur maison `external_api_unavailable_total` (label `service` : `sirene`, `ia_api`, `chorus_pro`) comble ce trou : il est incrémenté par les clients de `src/integrations/` sur chaque `httpx.RequestError` (connexion, DNS, timeout), là où l'échec est déjà loggé — et jamais sur une réponse 5xx, déjà comptée par l'instrumentation (pas de double comptage). C'est lui qui rend l'alerte « Dépendances externes » (définie dans `factur-ia-infra`) réellement utile.
