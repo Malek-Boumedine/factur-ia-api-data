@@ -48,6 +48,142 @@ gcloud run jobs create factur-ia-migrate \
 gcloud run jobs execute factur-ia-migrate --wait
 ```
 
+### Livraison continue (`.github/workflows/deploy.yml`)
+
+**Partage des responsabilités** : Terraform (dépôt d'infrastructure séparé) possède la *forme* du service Cloud Run — configuration, secrets, compte de service runtime, IAM — et pose un `ignore_changes` sur l'image ; la chaîne de livraison possède son *contenu* : elle construit l'image, la pousse dans Artifact Registry et déploie une nouvelle révision en ne passant que `--image`. Elle ne touche jamais à l'infrastructure.
+
+**Déroulé** : à la publication d'une release GitHub (créée par le workflow Semantic Release au merge sur `main`), le workflow checkout le tag `vX.Y.Z` (le `pyproject.toml` y est déjà bumpé — l'image annonce la bonne version), construit l'image avec deux tags (`X.Y.Z` + `sha-<commit>`, pas de `latest`), la pousse, met à jour puis exécute le job de migration `factur-ia-migrate` (échec du job = arrêt du workflow, l'ancienne révision continue de servir), déploie la révision **par digest**, puis interroge `/health` avec un jeton d'identité (l'ingress est sous IAM) — échec du workflow si la sonde ne répond pas. Un `workflow_dispatch` permet de (re)déployer n'importe quel tag existant sans créer de release (retour arrière compris) ; le retour arrière reste aussi possible dans la console Cloud Run (historique des révisions).
+
+**Contrainte côté migrations** : la migration s'exécute avant la bascule de révision, donc l'ancien code tourne brièvement sur le nouveau schéma. Les migrations Alembic doivent rester rétro-compatibles d'une version (pas de suppression/renommage de colonne utilisée par le code encore déployé).
+
+#### Variables GitHub à configurer
+
+Aucun secret : avec la fédération d'identité, rien de confidentiel n'est stocké. Tout va dans les **variables de dépôt** (Settings → Secrets and variables → Actions → Variables) :
+
+| Variable | Contenu | Exemple |
+|---|---|---|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Nom complet du provider WIF (sortie Terraform `.name`) | `projects/1234567890/locations/global/workloadIdentityPools/github-actions/providers/github-oidc` |
+| `GCP_DEPLOY_SA` | Email du compte de service de déploiement | `github-deployer-api-data@<projet>.iam.gserviceaccount.com` |
+| `GCP_PROJECT_ID` | ID du projet GCP | `factur-ia-prod` |
+| `GCP_REGION` | Région Cloud Run / Artifact Registry | `europe-west9` |
+| `ARTIFACT_REGISTRY_REPO` | Nom du dépôt Artifact Registry | `factur-ia` |
+| `CLOUD_RUN_SERVICE` | Nom du service Cloud Run (aussi utilisé comme nom d'image) | `factur-ia-api-data` |
+| `CLOUD_RUN_MIGRATE_JOB` | Nom du job de migration | `factur-ia-migrate` |
+
+#### Prérequis côté infrastructure (Terraform)
+
+Ressources à créer dans le dépôt d'infrastructure. Le pool et le provider sont **partagés par tous les dépôts** ; chaque dépôt a son propre compte de service de déploiement et sa propre liaison, restreinte à lui seul.
+
+```hcl
+# ── Fédération d'identité GitHub Actions (une seule fois, partagée) ──────────
+
+resource "google_iam_workload_identity_pool" "github" {
+  workload_identity_pool_id = "github-actions"
+  display_name              = "GitHub Actions"
+}
+
+resource "google_iam_workload_identity_pool_provider" "github" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-oidc"
+  display_name                       = "GitHub OIDC"
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.repository" = "assertion.repository"
+  }
+
+  # INDISPENSABLE : sans condition d'attribut, n'importe quel dépôt GitHub
+  # peut tenter l'échange de jeton auprès de ce provider. On restreint ici au
+  # propriétaire ; la restriction au dépôt précis se fait plus bas, sur la
+  # liaison workloadIdentityUser de chaque compte de service.
+  attribute_condition = "assertion.repository_owner == \"<OWNER>\""
+}
+
+# ── Compte de service de déploiement (un par dépôt) ──────────────────────────
+
+resource "google_service_account" "github_deployer" {
+  account_id   = "github-deployer-api-data"
+  display_name = "CD GitHub Actions — factur-ia-api-data"
+}
+
+# Seul le dépôt factur-ia-api-data peut emprunter ce compte de service.
+resource "google_service_account_iam_member" "deployer_wif" {
+  service_account_id = google_service_account.github_deployer.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/<OWNER>/factur-ia-api-data"
+}
+
+# ── Rôles du compte de déploiement (moindre privilège) ───────────────────────
+
+# Pousser l'image.
+resource "google_artifact_registry_repository_iam_member" "deployer_push" {
+  location   = var.region
+  repository = google_artifact_registry_repository.factur_ia.repository_id
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+# Déployer une révision — pas run.admin : le workflow ne doit pas pouvoir
+# modifier l'IAM du service.
+resource "google_cloud_run_v2_service_iam_member" "deployer_developer" {
+  location = var.region
+  name     = google_cloud_run_v2_service.api_data.name
+  role     = "roles/run.developer"
+  member   = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+# Appeler /health après déploiement (l'ingress est sous IAM).
+resource "google_cloud_run_v2_service_iam_member" "deployer_invoker" {
+  location = var.region
+  name     = google_cloud_run_v2_service.api_data.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+# Mettre à jour l'image du job de migration et l'exécuter.
+resource "google_cloud_run_v2_job_iam_member" "deployer_migrate" {
+  location = var.region
+  name     = google_cloud_run_v2_job.migrate.name
+  role     = "roles/run.developer"
+  member   = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+# Déployer une révision qui s'exécute sous l'identité du SA runtime du service.
+resource "google_service_account_iam_member" "deployer_actas_runtime" {
+  service_account_id = google_service_account.api_data_runtime.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+```
+
+À vérifier également dans le Terraform existant :
+
+- **`ignore_changes` sur l'image du service ET du job** — sinon Terraform réécrase l'image déployée au prochain `apply` :
+
+  ```hcl
+  # Service (google_cloud_run_v2_service)
+  lifecycle { ignore_changes = [template[0].containers[0].image, client, client_version] }
+
+  # Job (google_cloud_run_v2_job)
+  lifecycle { ignore_changes = [template[0].template[0].containers[0].image, client, client_version] }
+  ```
+
+  `client` / `client_version` : `gcloud run deploy` les repositionne à `gcloud`, ce qui créerait une dérive perpétuelle dans le plan Terraform.
+- Exposer le nom complet du provider en sortie : `output "wif_provider_name" { value = google_iam_workload_identity_pool_provider.github.name }` — c'est la valeur de `GCP_WORKLOAD_IDENTITY_PROVIDER`.
+
+#### Transposer aux autres dépôts
+
+Le workflow est conçu pour être copié tel quel dans `factur-ia-api-ia` et `factur-ia-web-django`, en ne changeant que les variables de dépôt. Ce qui diffère :
+
+- **Pool et provider WIF** : partagés, ne pas les recréer. Créer en revanche un compte de service de déploiement par dépôt, avec sa liaison `workloadIdentityUser` restreinte au dépôt concerné (et ses rôles sur *son* service).
+- **Étape de migration** : à supprimer si le dépôt n'a pas de base (API IA), ou à adapter au job du dépôt (client Django : `python manage.py migrate`).
+- **Sonde `/health`** : si l'ingress du service est public (client web), supprimer l'étape « Jeton d'identité » et le header `Authorization` — et retirer `roles/run.invoker` des rôles Terraform. Adapter le chemin de la sonde si besoin.
+- **Déclencheur** : le workflow suppose une release GitHub publiée par semantic-release. Si un dépôt n'en a pas, adapter le déclencheur (tags `v*`, ou push sur `main` avec les précautions de version qui vont avec).
+
 ### Limites connues (à traiter avant une vraie prod)
 
 1. **`uploads/` est éphémère sur Cloud Run** : les documents uploadés sont écrits sur le disque local du conteneur (système de fichiers en mémoire), et **perdus au recyclage de l'instance**. À migrer vers un stockage objet (GCS) — tâche de production à part entière.
