@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.12.1 (2026-08-31)
+
+### Bug Fixes
+
+- **integrations**: Authentification IAM des appels vers l'API IA
+  ([`d3af290`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/d3af2903ea76841f98ba2f973464afce7fb82219))
+
+
 ## v1.12.0 (2026-08-31)
 
 ### Bug Fixes
