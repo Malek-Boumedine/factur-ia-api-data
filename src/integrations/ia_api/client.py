@@ -13,6 +13,10 @@ from loguru import logger
 
 from src.core.config import settings
 from src.core.telemetry import record_external_api_unavailable
+from src.integrations.gcp_identity import (
+    IdentityTokenError,
+    serverless_authorization_header,
+)
 
 TIMEOUT_SECONDS = 10.0
 
@@ -27,9 +31,12 @@ async def trigger_extraction(
     Déclenche l'extraction OCR d'un document auprès de l'API IA.
 
     Envoie le fichier en multipart avec l'identifiant du document, le secret
-    partagé étant transmis en header. Retourne True si l'API IA a accepté la
-    demande, False en cas d'échec (fichier illisible, réseau, timeout, statut
-    HTTP d'erreur). Le token n'est jamais journalisé.
+    partagé étant transmis en header — complété, quand l'authentification IAM
+    Cloud Run est activée, d'un jeton d'identité Google dans
+    `X-Serverless-Authorization` (cf. `src.integrations.gcp_identity`).
+    Retourne True si l'API IA a accepté la demande, False en cas d'échec
+    (fichier illisible, jeton d'identité impossible à obtenir, réseau,
+    timeout, statut HTTP d'erreur). Le token n'est jamais journalisé.
 
     Le paramètre `transport` permet d'injecter un transport httpx factice
     dans les tests ; en production il reste à None (transport par défaut).
@@ -45,13 +52,28 @@ async def trigger_extraction(
         )
         return False
 
+    try:
+        headers = {
+            "X-OCR-Secret-Token": settings.SECRET_OCR_TOKEN
+        } | await serverless_authorization_header()
+    except IdentityTokenError:
+        # Sans jeton d'identité, Cloud Run répondrait 403 : l'API IA est de
+        # fait injoignable, même circuit d'échec qu'une erreur réseau.
+        logger.error(
+            "Jeton d'identité indisponible, extraction OCR du document {} "
+            "non déclenchée",
+            id_document,
+        )
+        record_external_api_unavailable("ia_api")
+        return False
+
     async with httpx.AsyncClient(transport=transport) as client:
         try:
             response = await client.post(
                 url,
                 files={"file": (file_path.name, file_content, content_type)},
                 data={"id_document": str(id_document)},
-                headers={"X-OCR-Secret-Token": settings.SECRET_OCR_TOKEN},
+                headers=headers,
                 timeout=TIMEOUT_SECONDS,
             )
             response.raise_for_status()
