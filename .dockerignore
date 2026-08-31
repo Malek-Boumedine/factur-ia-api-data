@@ -1,0 +1,42 @@
+# Secrets et environnement — jamais dans le contexte de build
+.env
+.env.*
+
+# Git et CI
+.git
+.github
+
+# Environnements et caches locaux
+.venv
+__pycache__/
+**/__pycache__/
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.python-version
+
+# Tests et outillage de dev
+tests/
+scripts/
+local_ci.sh
+.pre-commit-config.yaml
+.secrets.baseline
+
+# Artefacts et fichiers non nécessaires à l'exécution
+# (README.md reste inclus : requis par le build hatchling du projet)
+contracts/
+CHANGELOG.md
+LICENSE
+todo*
+*.png
+uploads/
+
+# Docker lui-même
+docker-compose.yml
+Dockerfile
+dockerfile
+.dockerignore
+
+# Claude Code
+.claude/
+CLAUDE.md

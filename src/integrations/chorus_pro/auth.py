@@ -15,6 +15,7 @@ import httpx
 from loguru import logger
 
 from src.core.config import settings
+from src.core.telemetry import record_external_api_unavailable
 from src.integrations.chorus_pro.exceptions import (
     ChorusProAuthError,
     ChorusProConfigurationError,
@@ -88,6 +89,11 @@ class PisteAuthClient:
             # Le message httpx ne contient ni body ni credentials : rien ne
             # peut fuiter dans les logs.
             logger.error("Échec de la requête token PISTE : {}", exc)
+            # Seuls les échecs de transport comptent dans le compteur
+            # d'indisponibilité : les réponses HTTP sont déjà enregistrées
+            # par l'instrumentation httpx.
+            if isinstance(exc, httpx.RequestError):
+                record_external_api_unavailable("chorus_pro")
             raise ChorusProAuthError(
                 "Le serveur d'authentification PISTE est injoignable."
             ) from exc

@@ -12,6 +12,7 @@ non-retentative d'une ``IntegrityError`` étrangère à la numérotation, et le
 ciblage de ``_is_collision_numero``.
 """
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -27,6 +28,11 @@ from src.factures.models import Facture, StatutFacture
 from src.factures.router import router as factures_router
 from src.factures.service import _is_collision_numero
 from src.utilisateurs.models import Utilisateur
+
+# Le service construit le numéro à partir du mois courant : les numéros
+# simulés doivent suivre la même logique pour rester relus comme "dernier
+# numéro du mois".
+_MOIS_COURANT = datetime.now().strftime("%Y%m")
 
 
 class _Result:
@@ -109,7 +115,7 @@ def _referentiels() -> dict[tuple[Any, Any], Any]:
 
 def _collision_error() -> IntegrityError:
     orig = Exception(
-        "(1062, \"Duplicate entry '1-FAC-202607-0005' for key "
+        f"(1062, \"Duplicate entry '1-FAC-{_MOIS_COURANT}-0005' for key "
         "'facture.unique_entreprise_numero_facture'\")"
     )
     return IntegrityError("UPDATE facture SET numero_facture = ...", {}, orig)
@@ -158,10 +164,10 @@ async def test_collision_puis_succes_au_deuxieme_essai() -> None:
         results=[
             facture,
             statut_validee,
-            "FAC-202607-0004",
+            f"FAC-{_MOIS_COURANT}-0004",
             facture,
             statut_validee,
-            "FAC-202607-0005",
+            f"FAC-{_MOIS_COURANT}-0005",
             facture,
         ],
         commit_effects=[_collision_error(), None],
@@ -170,7 +176,7 @@ async def test_collision_puis_succes_au_deuxieme_essai() -> None:
     response = await _valider(_app(session))
 
     assert response.status_code == 200
-    assert response.json()["numero_facture"] == "FAC-202607-0006"
+    assert response.json()["numero_facture"] == f"FAC-{_MOIS_COURANT}-0006"
     assert session.rollbacks == 1
     assert session.commits == 2
 
@@ -182,13 +188,13 @@ async def test_epuisement_des_tentatives_409() -> None:
         results=[
             facture,
             statut_validee,
-            "FAC-202607-0004",
+            f"FAC-{_MOIS_COURANT}-0004",
             facture,
             statut_validee,
-            "FAC-202607-0005",
+            f"FAC-{_MOIS_COURANT}-0005",
             facture,
             statut_validee,
-            "FAC-202607-0006",
+            f"FAC-{_MOIS_COURANT}-0006",
         ],
         commit_effects=[_collision_error(), _collision_error(), _collision_error()],
         gets=_referentiels(),
@@ -206,7 +212,7 @@ async def test_integrity_error_etrangere_non_retentee() -> None:
     quelle dès la 1re tentative : la retenter masquerait un vrai bug."""
     facture = _facture_brouillon()
     session = _FakeSession(
-        results=[facture, statut_validee, "FAC-202607-0004"],
+        results=[facture, statut_validee, f"FAC-{_MOIS_COURANT}-0004"],
         commit_effects=[_fk_error()],
         gets=_referentiels(),
     )

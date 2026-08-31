@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v1.11.0 (2026-07-31)
+
+### Bug Fixes
+
+- **core**: Accepter les SIRET/SIREN aux formats d'affichage courants
+  ([`807141f`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/807141f4680c25d7a3cd50766837cc36b498a6f5))
+
+- **factures**: Avoir possible sur toute facture émise, pas seulement 'Validée'
+  ([`401a6dd`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/401a6dd3df6295b58afc2c7f893d79cec44a22cf))
+
+- **factures**: Resynchroniser les totaux d'un brouillon à chaque modification
+  ([`b52e833`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/b52e833b39d7ce5febfde1087984f16f32a9fd3e))
+
+### Features
+
+- **factures**: Chiffrement de l'IBAN au repos et masquage à l'affichage
+  ([`7a350a1`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/7a350a1be75782ff959586d731a70e6ecf11bf7f))
+
+- **factures**: Exposer le libellé du statut sur le détail d'une facture
+  ([`e8b3da7`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/e8b3da70576d76f39bead1e416fefc75d87b161e))
+
+- **facturx**: Clé de Luhn des SIRET pilotée par l'environnement (SIRET_LUHN_STRICT)
+  ([`6dca3ac`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/6dca3ac58b1b736753e2a897fc4209e090797208))
+
+
 ## v1.10.0 (2026-07-30)
 
 ### Features
