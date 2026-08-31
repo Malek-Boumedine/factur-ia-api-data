@@ -38,6 +38,11 @@ class Settings(BaseSettings):
 
     # API IA D'EXTRACTION (OCR)
     IA_API_BASE_URL: str
+    # Authentification IAM Cloud Run des appels sortants vers l'API IA :
+    # jeton d'identité Google dans X-Serverless-Authorization, audience =
+    # IA_API_BASE_URL. À activer uniquement sur Cloud Run (serveur de
+    # métadonnées requis) ; en dev et en test, rien ne change.
+    IA_API_IAM_AUTH_ENABLED: bool = False
 
     # CHORUS PRO (via PISTE) — environnement de QUALIFICATION (sandbox).
     # Optionnels : si les credentials sont absents, l'application démarre
