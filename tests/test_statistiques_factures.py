@@ -2,42 +2,27 @@
 
 Deux niveaux complémentaires :
 
-- **les agrégations** sont exécutées contre une vraie base SQLite en mémoire
-  construite depuis ``SQLModel.metadata`` (même approche que
-  ``test_unicite_numero_facture.py``). Les constructeurs de requêtes étant des
+- **les agrégations** sont exécutées contre la vraie base partagée de
+  ``tests/conftest.py`` (SQLite en mémoire construite depuis
+  ``SQLModel.metadata``, FK actives). Les constructeurs de requêtes étant des
   fonctions pures, les chiffres sont vérifiés pour de vrai — pas seulement la
   forme du SQL généré ;
 - **la route** est testée avec la session factice des autres tests factures
   (isolation tenant, paramètres, période par défaut, forme de la réponse).
 """
 
-from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
-# L'import de tous les modules de modèles (comme dans migrations/env.py) est
-# nécessaire pour que SQLModel.metadata contienne les tables référencées par
-# les clés étrangères de Facture.
 import pytest
-import src.abonnements.models  # noqa: F401
-import src.audit.models  # noqa: F401
-import src.auth.models  # noqa: F401
-import src.catalogue_produits.models  # noqa: F401
-import src.documents.models  # noqa: F401
-import src.entreprises.models  # noqa: F401
-import src.notifications.models  # noqa: F401
-import src.pdp.models  # noqa: F401
-import src.relances.models  # noqa: F401
-import src.utilisateurs.models  # noqa: F401
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.engine import Engine
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session
 from src.auth.dependencies import get_current_user, verify_tenant_access
-from src.clients.models import Client
 from src.core.database import get_session
-from src.factures.models import Facture, StatutFacture, TypeFacture
+from src.entreprises.models import Entreprise
+from src.factures.models import Facture, TypeFacture
 from src.factures.router import router as factures_router
 from src.factures.statistiques import (
     resoudre_periode,
@@ -50,11 +35,14 @@ from src.factures.statistiques import (
 )
 from src.utilisateurs.models import Utilisateur
 
-# Statuts du référentiel utilisés par les scénarios (cf. src/core/seed.py).
-STATUT_BROUILLON = 1
-STATUT_VALIDEE = 2
-STATUT_PAYEE = 3
-STATUT_ANNULEE = 4
+from tests.factories import (
+    STATUT_ANNULEE,
+    STATUT_BROUILLON,
+    STATUT_PAYEE,
+    STATUT_VALIDEE,
+    make_client,
+    make_facture,
+)
 
 ENTREPRISE = 1
 AUTRE_ENTREPRISE = 2
@@ -64,69 +52,21 @@ PERIODE = {"date_min": date(2026, 1, 1), "date_max": date(2026, 12, 31)}
 
 
 @pytest.fixture
-def engine() -> Iterator[Engine]:
-    """Base SQLite en mémoire avec le schéma complet des modèles."""
-    engine = create_engine("sqlite://")
-    SQLModel.metadata.create_all(engine)
-    yield engine
-    engine.dispose()
+def base(
+    session: Session,
+    entreprise: Entreprise,
+    autre_entreprise: Entreprise,
+    utilisateur: Utilisateur,
+    statuts_facture: dict[str, int],
+) -> Session:
+    """Session sur une base portant le graphe référencé par les FK des factures."""
+    return session
 
 
-def _facture(
-    *,
-    id_entreprise: int = ENTREPRISE,
-    numero: str,
-    ht: str,
-    tva: str,
-    ttc: str,
-    date_emission: date,
-    id_statut: int = STATUT_VALIDEE,
-    type_facture: TypeFacture = TypeFacture.FACTURE,
-    id_client: int | None = None,
-    devise: str = "EUR",
-    date_echeance: date | None = None,
-) -> Facture:
-    # SQLite n'applique pas les FK par défaut : les identifiants liés sont
-    # arbitraires quand le test ne porte pas sur la jointure.
-    return Facture(
-        id_entreprise=id_entreprise,
-        id_createur=1,
-        id_client=id_client,
-        numero_facture=numero,
-        date_emission=date_emission,
-        date_echeance=date_echeance,
-        devise=devise,
-        type_facture=type_facture,
-        id_statut=id_statut,
-        total_ht=Decimal(ht),
-        total_tva=Decimal(tva),
-        total_ttc=Decimal(ttc),
-    )
-
-
-def _client(id_client: int, raison_sociale: str) -> Client:
-    return Client(
-        id=id_client,
-        id_entreprise=ENTREPRISE,
-        id_createur=1,
-        raison_sociale=raison_sociale,
-        code_postal="75001",
-        ville="Paris",
-    )
-
-
-def _peupler(session: Session, factures: list[Facture]) -> None:
-    """Insère le référentiel des statuts puis le jeu de factures."""
-    session.add_all(
-        [
-            StatutFacture(id=STATUT_BROUILLON, libelle="brouillon"),
-            StatutFacture(id=STATUT_VALIDEE, libelle="validée"),
-            StatutFacture(id=STATUT_PAYEE, libelle="payee"),
-            StatutFacture(id=STATUT_ANNULEE, libelle="annulee"),
-        ]
-    )
-    session.add_all(factures)
-    session.commit()
+def _peupler(base: Session, factures: list[Facture]) -> None:
+    """Insère le jeu de factures (le référentiel vient des fixtures)."""
+    base.add_all(factures)
+    base.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -134,60 +74,59 @@ def _peupler(session: Session, factures: list[Facture]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_totaux_nets_des_avoirs(engine: Engine) -> None:
+def test_totaux_nets_des_avoirs(base: Session) -> None:
     """CA net, TVA et compteurs sur un jeu mixte factures / avoirs.
 
     Les deux avoirs couvrent les deux modes de stockage constatés en base :
     négatif pour un avoir généré depuis une facture, positif pour un avoir
     saisi directement. Les deux doivent se soustraire.
     """
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-1",
-                    ht="1000.00",
-                    tva="200.00",
-                    ttc="1200.00",
-                    date_emission=date(2026, 3, 10),
-                ),
-                _facture(
-                    numero="FAC-2",
-                    ht="500.00",
-                    tva="100.00",
-                    ttc="600.00",
-                    date_emission=date(2026, 4, 5),
-                ),
-                # Avoir généré : montants stockés en négatif.
-                _facture(
-                    numero="AV-1",
-                    ht="-200.00",
-                    tva="-40.00",
-                    ttc="-240.00",
-                    date_emission=date(2026, 4, 20),
-                    type_facture=TypeFacture.AVOIR,
-                ),
-                # Avoir saisi à la main : montants stockés en positif. Un SUM
-                # naïf l'ajouterait au CA au lieu de le retrancher.
-                _facture(
-                    numero="AV-2",
-                    ht="100.00",
-                    tva="20.00",
-                    ttc="120.00",
-                    date_emission=date(2026, 5, 2),
-                    type_facture=TypeFacture.AVOIR,
-                ),
-            ],
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-1",
+                ht="1000.00",
+                tva="200.00",
+                ttc="1200.00",
+                date_emission=date(2026, 3, 10),
+            ),
+            make_facture(
+                numero="FAC-2",
+                ht="500.00",
+                tva="100.00",
+                ttc="600.00",
+                date_emission=date(2026, 4, 5),
+            ),
+            # Avoir généré : montants stockés en négatif.
+            make_facture(
+                numero="AV-1",
+                ht="-200.00",
+                tva="-40.00",
+                ttc="-240.00",
+                date_emission=date(2026, 4, 20),
+                type_facture=TypeFacture.AVOIR,
+            ),
+            # Avoir saisi à la main : montants stockés en positif. Un SUM
+            # naïf l'ajouterait au CA au lieu de le retrancher.
+            make_facture(
+                numero="AV-2",
+                ht="100.00",
+                tva="20.00",
+                ttc="120.00",
+                date_emission=date(2026, 5, 2),
+                type_facture=TypeFacture.AVOIR,
+            ),
+        ],
+    )
+    ligne = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
+            **PERIODE,
         )
-        ligne = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-                **PERIODE,
-            )
-        ).one()
+    ).one()
 
     ca_ht, tva, ca_ttc, nombre_factures, nombre_avoirs, _retard, _restant = ligne
     # 1000 + 500 - 200 - 100 = 1200
@@ -198,121 +137,118 @@ def test_totaux_nets_des_avoirs(engine: Engine) -> None:
     assert nombre_avoirs == 2
 
 
-def test_brouillons_exclus_du_ca_et_comptes_a_part(engine: Engine) -> None:
+def test_brouillons_exclus_du_ca_et_comptes_a_part(base: Session) -> None:
     """Un brouillon ne pèse pas sur le CA mais ressort dans son propre bloc."""
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-1",
-                    ht="1000.00",
-                    tva="200.00",
-                    ttc="1200.00",
-                    date_emission=date(2026, 3, 10),
-                ),
-                _facture(
-                    numero="BROUILLON-X",
-                    ht="9999.00",
-                    tva="0.00",
-                    ttc="9999.00",
-                    date_emission=date(2026, 3, 11),
-                    id_statut=STATUT_BROUILLON,
-                ),
-            ],
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-1",
+                ht="1000.00",
+                tva="200.00",
+                ttc="1200.00",
+                date_emission=date(2026, 3, 10),
+            ),
+            make_facture(
+                numero="BROUILLON-X",
+                ht="9999.00",
+                tva="0.00",
+                ttc="9999.00",
+                date_emission=date(2026, 3, 11),
+                id_statut=STATUT_BROUILLON,
+            ),
+        ],
+    )
+    totaux = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
+            **PERIODE,
         )
-        totaux = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-                **PERIODE,
-            )
-        ).one()
-        brouillons = session.execute(
-            statement_brouillons(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
-        ).one()
+    ).one()
+    brouillons = base.execute(
+        statement_brouillons(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
+    ).one()
 
     assert Decimal(str(totaux[2])) == Decimal("1200.00")
     assert brouillons[0] == 1
     assert Decimal(str(brouillons[1])) == Decimal("9999.00")
 
 
-def test_facture_annulee_neutralisee_par_son_avoir(engine: Engine) -> None:
+def test_facture_annulee_neutralisee_par_son_avoir(base: Session) -> None:
     """Une facture annulée reste comptée positivement : avec son avoir, net 0.
 
     L'exclure tout en gardant l'avoir donnerait un CA négatif.
     """
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-1",
-                    ht="800.00",
-                    tva="160.00",
-                    ttc="960.00",
-                    date_emission=date(2026, 2, 3),
-                    id_statut=STATUT_ANNULEE,
-                ),
-                _facture(
-                    numero="AV-1",
-                    ht="-800.00",
-                    tva="-160.00",
-                    ttc="-960.00",
-                    date_emission=date(2026, 2, 4),
-                    id_statut=STATUT_VALIDEE,
-                    type_facture=TypeFacture.AVOIR,
-                ),
-            ],
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-1",
+                ht="800.00",
+                tva="160.00",
+                ttc="960.00",
+                date_emission=date(2026, 2, 3),
+                id_statut=STATUT_ANNULEE,
+            ),
+            make_facture(
+                numero="AV-1",
+                ht="-800.00",
+                tva="-160.00",
+                ttc="-960.00",
+                date_emission=date(2026, 2, 4),
+                id_statut=STATUT_VALIDEE,
+                type_facture=TypeFacture.AVOIR,
+            ),
+        ],
+    )
+    ligne = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
+            **PERIODE,
         )
-        ligne = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-                **PERIODE,
-            )
-        ).one()
+    ).one()
 
     assert Decimal(str(ligne[0])) == Decimal("0.00")
     assert Decimal(str(ligne[2])) == Decimal("0.00")
 
 
-def test_isolation_tenant(engine: Engine) -> None:
+def test_isolation_tenant(base: Session) -> None:
     """Les factures d'une autre entreprise n'entrent dans aucune agrégation."""
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-1",
-                    ht="100.00",
-                    tva="20.00",
-                    ttc="120.00",
-                    date_emission=date(2026, 3, 10),
-                ),
-                _facture(
-                    id_entreprise=AUTRE_ENTREPRISE,
-                    numero="FAC-1",
-                    ht="5000.00",
-                    tva="1000.00",
-                    ttc="6000.00",
-                    date_emission=date(2026, 3, 10),
-                ),
-            ],
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-1",
+                ht="100.00",
+                tva="20.00",
+                ttc="120.00",
+                date_emission=date(2026, 3, 10),
+            ),
+            make_facture(
+                id_entreprise=AUTRE_ENTREPRISE,
+                numero="FAC-1",
+                ht="5000.00",
+                tva="1000.00",
+                ttc="6000.00",
+                date_emission=date(2026, 3, 10),
+            ),
+        ],
+    )
+    totaux = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
+            **PERIODE,
         )
-        totaux = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-                **PERIODE,
-            )
-        ).one()
-        par_mois = session.execute(
-            statement_par_mois(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
-        ).all()
+    ).one()
+    par_mois = base.execute(
+        statement_par_mois(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
+    ).all()
 
     assert Decimal(str(totaux[2])) == Decimal("120.00")
     assert totaux[3] == 1
@@ -320,145 +256,142 @@ def test_isolation_tenant(engine: Engine) -> None:
     assert Decimal(str(par_mois[0][3])) == Decimal("120.00")
 
 
-def test_periode_filtree(engine: Engine) -> None:
+def test_periode_filtree(base: Session) -> None:
     """Bornes de dates incluses : hors période, la facture n'est pas comptée."""
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="AVANT",
-                    ht="100.00",
-                    tva="0.00",
-                    ttc="100.00",
-                    date_emission=date(2026, 5, 31),
-                ),
-                _facture(
-                    numero="BORNE-MIN",
-                    ht="200.00",
-                    tva="0.00",
-                    ttc="200.00",
-                    date_emission=date(2026, 6, 1),
-                ),
-                _facture(
-                    numero="BORNE-MAX",
-                    ht="300.00",
-                    tva="0.00",
-                    ttc="300.00",
-                    date_emission=date(2026, 6, 30),
-                ),
-                _facture(
-                    numero="APRES",
-                    ht="400.00",
-                    tva="0.00",
-                    ttc="400.00",
-                    date_emission=date(2026, 7, 1),
-                ),
-            ],
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="AVANT",
+                ht="100.00",
+                tva="0.00",
+                ttc="100.00",
+                date_emission=date(2026, 5, 31),
+            ),
+            make_facture(
+                numero="BORNE-MIN",
+                ht="200.00",
+                tva="0.00",
+                ttc="200.00",
+                date_emission=date(2026, 6, 1),
+            ),
+            make_facture(
+                numero="BORNE-MAX",
+                ht="300.00",
+                tva="0.00",
+                ttc="300.00",
+                date_emission=date(2026, 6, 30),
+            ),
+            make_facture(
+                numero="APRES",
+                ht="400.00",
+                tva="0.00",
+                ttc="400.00",
+                date_emission=date(2026, 7, 1),
+            ),
+        ],
+    )
+    ligne = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            date_min=date(2026, 6, 1),
+            date_max=date(2026, 6, 30),
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
         )
-        ligne = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                date_min=date(2026, 6, 1),
-                date_max=date(2026, 6, 30),
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-            )
-        ).one()
+    ).one()
 
     # Les deux bornes sont incluses, rien autour.
     assert Decimal(str(ligne[2])) == Decimal("500.00")
     assert ligne[3] == 2
 
 
-def test_devises_non_eur_exclues_et_signalees(engine: Engine) -> None:
+def test_devises_non_eur_exclues_et_signalees(base: Session) -> None:
     """Les autres devises sortent des totaux et sont remontées séparément."""
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-EUR",
-                    ht="100.00",
-                    tva="0.00",
-                    ttc="100.00",
-                    date_emission=date(2026, 3, 10),
-                ),
-                _facture(
-                    numero="FAC-USD",
-                    ht="900.00",
-                    tva="0.00",
-                    ttc="900.00",
-                    date_emission=date(2026, 3, 11),
-                    devise="USD",
-                ),
-                _facture(
-                    numero="FAC-USD-2",
-                    ht="800.00",
-                    tva="0.00",
-                    ttc="800.00",
-                    date_emission=date(2026, 3, 12),
-                    devise="USD",
-                ),
-                _facture(
-                    numero="FAC-CHF",
-                    ht="700.00",
-                    tva="0.00",
-                    ttc="700.00",
-                    date_emission=date(2026, 3, 13),
-                    devise="CHF",
-                ),
-            ],
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-EUR",
+                ht="100.00",
+                tva="0.00",
+                ttc="100.00",
+                date_emission=date(2026, 3, 10),
+            ),
+            make_facture(
+                numero="FAC-USD",
+                ht="900.00",
+                tva="0.00",
+                ttc="900.00",
+                date_emission=date(2026, 3, 11),
+                devise="USD",
+            ),
+            make_facture(
+                numero="FAC-USD-2",
+                ht="800.00",
+                tva="0.00",
+                ttc="800.00",
+                date_emission=date(2026, 3, 12),
+                devise="USD",
+            ),
+            make_facture(
+                numero="FAC-CHF",
+                ht="700.00",
+                tva="0.00",
+                ttc="700.00",
+                date_emission=date(2026, 3, 13),
+                devise="CHF",
+            ),
+        ],
+    )
+    totaux = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
+            **PERIODE,
         )
-        totaux = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-                **PERIODE,
-            )
-        ).one()
-        exclues = session.execute(
-            statement_devises_exclues(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
-        ).all()
+    ).one()
+    exclues = base.execute(
+        statement_devises_exclues(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
+    ).all()
 
     assert Decimal(str(totaux[2])) == Decimal("100.00")
     assert [(devise, nombre) for devise, nombre in exclues] == [("CHF", 1), ("USD", 2)]
 
 
-def test_repartition_par_statut(engine: Engine) -> None:
+def test_repartition_par_statut(base: Session) -> None:
     """Nombre et montant par libellé de statut, résolus par la jointure."""
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-1",
-                    ht="100.00",
-                    tva="0.00",
-                    ttc="100.00",
-                    date_emission=date(2026, 3, 10),
-                ),
-                _facture(
-                    numero="FAC-2",
-                    ht="200.00",
-                    tva="0.00",
-                    ttc="200.00",
-                    date_emission=date(2026, 3, 11),
-                ),
-                _facture(
-                    numero="FAC-3",
-                    ht="300.00",
-                    tva="0.00",
-                    ttc="300.00",
-                    date_emission=date(2026, 3, 12),
-                    id_statut=STATUT_PAYEE,
-                ),
-            ],
-        )
-        lignes = session.execute(
-            statement_par_statut(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
-        ).all()
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-1",
+                ht="100.00",
+                tva="0.00",
+                ttc="100.00",
+                date_emission=date(2026, 3, 10),
+            ),
+            make_facture(
+                numero="FAC-2",
+                ht="200.00",
+                tva="0.00",
+                ttc="200.00",
+                date_emission=date(2026, 3, 11),
+            ),
+            make_facture(
+                numero="FAC-3",
+                ht="300.00",
+                tva="0.00",
+                ttc="300.00",
+                date_emission=date(2026, 3, 12),
+                id_statut=STATUT_PAYEE,
+            ),
+        ],
+    )
+    lignes = base.execute(
+        statement_par_statut(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
+    ).all()
 
     assert [
         (libelle, nombre, Decimal(str(montant))) for libelle, nombre, montant in lignes
@@ -468,39 +401,38 @@ def test_repartition_par_statut(engine: Engine) -> None:
     ]
 
 
-def test_serie_mensuelle(engine: Engine) -> None:
+def test_serie_mensuelle(base: Session) -> None:
     """Regroupement par mois d'émission, ordonné, avoirs soustraits."""
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-1",
-                    ht="100.00",
-                    tva="20.00",
-                    ttc="120.00",
-                    date_emission=date(2026, 1, 15),
-                ),
-                _facture(
-                    numero="FAC-2",
-                    ht="200.00",
-                    tva="40.00",
-                    ttc="240.00",
-                    date_emission=date(2026, 3, 2),
-                ),
-                _facture(
-                    numero="AV-1",
-                    ht="50.00",
-                    tva="10.00",
-                    ttc="60.00",
-                    date_emission=date(2026, 3, 20),
-                    type_facture=TypeFacture.AVOIR,
-                ),
-            ],
-        )
-        lignes = session.execute(
-            statement_par_mois(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
-        ).all()
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-1",
+                ht="100.00",
+                tva="20.00",
+                ttc="120.00",
+                date_emission=date(2026, 1, 15),
+            ),
+            make_facture(
+                numero="FAC-2",
+                ht="200.00",
+                tva="40.00",
+                ttc="240.00",
+                date_emission=date(2026, 3, 2),
+            ),
+            make_facture(
+                numero="AV-1",
+                ht="50.00",
+                tva="10.00",
+                ttc="60.00",
+                date_emission=date(2026, 3, 20),
+                type_facture=TypeFacture.AVOIR,
+            ),
+        ],
+    )
+    lignes = base.execute(
+        statement_par_mois(id_entreprise=ENTREPRISE, devise="EUR", **PERIODE)
+    ).all()
 
     resultat = [
         (int(annee), int(mois), Decimal(str(ca_ht)), Decimal(str(ca_ttc)), nombre)
@@ -513,55 +445,59 @@ def test_serie_mensuelle(engine: Engine) -> None:
     ]
 
 
-def test_top_clients(engine: Engine) -> None:
+def test_top_clients(base: Session) -> None:
     """Classement par CA décroissant, nom résolu par la jointure, limite appliquée.
 
     Les factures sans client rattaché forment un groupe à ``id_client`` null
     au lieu de disparaître (jointure externe).
     """
-    with Session(engine) as session:
-        session.add_all([_client(10, "Petit Client"), _client(11, "Gros Client")])
-        _peupler(
-            session,
-            [
-                _facture(
-                    numero="FAC-1",
-                    ht="100.00",
-                    tva="0.00",
-                    ttc="100.00",
-                    date_emission=date(2026, 3, 10),
-                    id_client=10,
-                ),
-                _facture(
-                    numero="FAC-2",
-                    ht="900.00",
-                    tva="0.00",
-                    ttc="900.00",
-                    date_emission=date(2026, 3, 11),
-                    id_client=11,
-                ),
-                _facture(
-                    numero="FAC-3",
-                    ht="500.00",
-                    tva="0.00",
-                    ttc="500.00",
-                    date_emission=date(2026, 3, 12),
-                    id_client=11,
-                ),
-                _facture(
-                    numero="FAC-4",
-                    ht="300.00",
-                    tva="0.00",
-                    ttc="300.00",
-                    date_emission=date(2026, 3, 13),
-                ),
-            ],
+    base.add_all(
+        [
+            make_client(id=10, raison_sociale="Petit Client"),
+            make_client(id=11, raison_sociale="Gros Client"),
+        ]
+    )
+    _peupler(
+        base,
+        [
+            make_facture(
+                numero="FAC-1",
+                ht="100.00",
+                tva="0.00",
+                ttc="100.00",
+                date_emission=date(2026, 3, 10),
+                id_client=10,
+            ),
+            make_facture(
+                numero="FAC-2",
+                ht="900.00",
+                tva="0.00",
+                ttc="900.00",
+                date_emission=date(2026, 3, 11),
+                id_client=11,
+            ),
+            make_facture(
+                numero="FAC-3",
+                ht="500.00",
+                tva="0.00",
+                ttc="500.00",
+                date_emission=date(2026, 3, 12),
+                id_client=11,
+            ),
+            make_facture(
+                numero="FAC-4",
+                ht="300.00",
+                tva="0.00",
+                ttc="300.00",
+                date_emission=date(2026, 3, 13),
+            ),
+        ],
+    )
+    lignes = base.execute(
+        statement_top_clients(
+            id_entreprise=ENTREPRISE, devise="EUR", limite=10, **PERIODE
         )
-        lignes = session.execute(
-            statement_top_clients(
-                id_entreprise=ENTREPRISE, devise="EUR", limite=10, **PERIODE
-            )
-        ).all()
+    ).all()
 
     assert [
         (id_client, nom, Decimal(str(ca)), nombre)
@@ -572,82 +508,80 @@ def test_top_clients(engine: Engine) -> None:
         (10, "Petit Client", Decimal("100.00"), 1),
     ]
 
-    with Session(engine) as session:
-        limitees = session.execute(
-            statement_top_clients(
-                id_entreprise=ENTREPRISE, devise="EUR", limite=1, **PERIODE
-            )
-        ).all()
+    limitees = base.execute(
+        statement_top_clients(
+            id_entreprise=ENTREPRISE, devise="EUR", limite=1, **PERIODE
+        )
+    ).all()
     assert len(limitees) == 1
     assert limitees[0][0] == 11
 
 
-def test_encours_et_montant_en_retard(engine: Engine) -> None:
+def test_encours_et_montant_en_retard(base: Session) -> None:
     """Retard fondé sur la date d'échéance, encours excluant payées et annulées.
 
     Le statut ``en_retard`` du référentiel n'est jamais posé par l'API : un
     indicateur qui s'y fierait serait toujours nul.
     """
-    with Session(engine) as session:
-        _peupler(
-            session,
-            [
-                # Échue et non soldée : en retard, et dans l'encours.
-                _facture(
-                    numero="FAC-RETARD",
-                    ht="1000.00",
-                    tva="0.00",
-                    ttc="1000.00",
-                    date_emission=date(2026, 3, 1),
-                    date_echeance=date(2026, 4, 1),
-                ),
-                # Échéance à venir : dans l'encours seulement.
-                _facture(
-                    numero="FAC-A-VENIR",
-                    ht="500.00",
-                    tva="0.00",
-                    ttc="500.00",
-                    date_emission=date(2026, 7, 1),
-                    date_echeance=date(2026, 9, 1),
-                ),
-                # Échue mais payée : ni retard, ni encours.
-                _facture(
-                    numero="FAC-PAYEE",
-                    ht="700.00",
-                    tva="0.00",
-                    ttc="700.00",
-                    date_emission=date(2026, 2, 1),
-                    date_echeance=date(2026, 3, 1),
-                    id_statut=STATUT_PAYEE,
-                ),
-                # Échue mais annulée : ni retard, ni encours.
-                _facture(
-                    numero="FAC-ANNULEE",
-                    ht="300.00",
-                    tva="0.00",
-                    ttc="300.00",
-                    date_emission=date(2026, 2, 2),
-                    date_echeance=date(2026, 3, 2),
-                    id_statut=STATUT_ANNULEE,
-                ),
-                # Sans échéance : jamais en retard, mais toujours dû.
-                _facture(
-                    numero="FAC-SANS-ECHEANCE",
-                    ht="200.00",
-                    tva="0.00",
-                    ttc="200.00",
-                    date_emission=date(2026, 3, 5),
-                ),
-            ],
+    _peupler(
+        base,
+        [
+            # Échue et non soldée : en retard, et dans l'encours.
+            make_facture(
+                numero="FAC-RETARD",
+                ht="1000.00",
+                tva="0.00",
+                ttc="1000.00",
+                date_emission=date(2026, 3, 1),
+                date_echeance=date(2026, 4, 1),
+            ),
+            # Échéance à venir : dans l'encours seulement.
+            make_facture(
+                numero="FAC-A-VENIR",
+                ht="500.00",
+                tva="0.00",
+                ttc="500.00",
+                date_emission=date(2026, 7, 1),
+                date_echeance=date(2026, 9, 1),
+            ),
+            # Échue mais payée : ni retard, ni encours.
+            make_facture(
+                numero="FAC-PAYEE",
+                ht="700.00",
+                tva="0.00",
+                ttc="700.00",
+                date_emission=date(2026, 2, 1),
+                date_echeance=date(2026, 3, 1),
+                id_statut=STATUT_PAYEE,
+            ),
+            # Échue mais annulée : ni retard, ni encours.
+            make_facture(
+                numero="FAC-ANNULEE",
+                ht="300.00",
+                tva="0.00",
+                ttc="300.00",
+                date_emission=date(2026, 2, 2),
+                date_echeance=date(2026, 3, 2),
+                id_statut=STATUT_ANNULEE,
+            ),
+            # Sans échéance : jamais en retard, mais toujours dû.
+            make_facture(
+                numero="FAC-SANS-ECHEANCE",
+                ht="200.00",
+                tva="0.00",
+                ttc="200.00",
+                date_emission=date(2026, 3, 5),
+            ),
+        ],
+    )
+    ligne = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
+            **PERIODE,
         )
-        ligne = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-                **PERIODE,
-            )
-        ).one()
+    ).one()
 
     _ca_ht, _tva, _ca_ttc, _nb, _nb_avoirs, retard, restant = ligne
     assert Decimal(str(retard)) == Decimal("1000.00")
@@ -655,18 +589,16 @@ def test_encours_et_montant_en_retard(engine: Engine) -> None:
     assert Decimal(str(restant)) == Decimal("1700.00")
 
 
-def test_aucune_facture_agregats_nuls(engine: Engine) -> None:
+def test_aucune_facture_agregats_nuls(base: Session) -> None:
     """Période vide : les SUM valent NULL en SQL, jamais une erreur."""
-    with Session(engine) as session:
-        _peupler(session, [])
-        ligne = session.execute(
-            statement_totaux(
-                id_entreprise=ENTREPRISE,
-                devise="EUR",
-                aujourd_hui=AUJOURD_HUI,
-                **PERIODE,
-            )
-        ).one()
+    ligne = base.execute(
+        statement_totaux(
+            id_entreprise=ENTREPRISE,
+            devise="EUR",
+            aujourd_hui=AUJOURD_HUI,
+            **PERIODE,
+        )
+    ).one()
 
     assert ligne[0] is None
     assert ligne[2] is None

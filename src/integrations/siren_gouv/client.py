@@ -1,6 +1,9 @@
 from typing import Any
 
 import httpx
+from loguru import logger
+
+from src.core.telemetry import record_external_api_unavailable
 
 
 async def get_company_by_identifier(identifier: str) -> dict[str, Any] | None:
@@ -68,5 +71,17 @@ async def get_company_by_identifier(identifier: str) -> dict[str, Any] | None:
 
             return None
 
-        except httpx.HTTPError:
+        except httpx.RequestError as exc:
+            # Seuls les échecs de transport (connexion, DNS, timeout) comptent
+            # dans le compteur d'indisponibilité : les réponses 5xx sont déjà
+            # enregistrées par l'instrumentation httpx. Le message d'une
+            # RequestError ne contient pas l'URL : le SIRET cherché ne peut
+            # pas fuiter dans les logs.
+            logger.error("SIRENE injoignable (réseau ou timeout) : {}", exc)
+            record_external_api_unavailable("sirene")
+            return None
+        except httpx.HTTPStatusError as exc:
+            # Jamais le message complet : il contient l'URL avec le SIRET en
+            # query. Le statut suffit.
+            logger.error("SIRENE a répondu HTTP {}", exc.response.status_code)
             return None

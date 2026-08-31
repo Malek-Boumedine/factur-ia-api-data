@@ -12,6 +12,7 @@ import httpx
 from loguru import logger
 
 from src.core.config import settings
+from src.core.telemetry import record_external_api_unavailable
 
 TIMEOUT_SECONDS = 10.0
 
@@ -62,6 +63,11 @@ async def trigger_extraction(
                 id_document,
                 exc,
             )
+            # Seuls les échecs de transport (connexion, DNS, timeout) comptent
+            # dans le compteur d'indisponibilité : les réponses 5xx sont déjà
+            # enregistrées par l'instrumentation httpx.
+            if isinstance(exc, httpx.RequestError):
+                record_external_api_unavailable("ia_api")
             return False
 
     return True
