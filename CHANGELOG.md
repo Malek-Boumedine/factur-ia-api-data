@@ -2,6 +2,47 @@
 
 <!-- version list -->
 
+## v1.12.0 (2026-08-31)
+
+### Bug Fixes
+
+- **tests**: Calcule le mois courant au lieu de le figer
+  ([`f92909b`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/f92909b8d3fec372162064ba73ee1bdd2117bf25))
+
+### Chores
+
+- **docker**: Image de production multi-stage compatible Cloud Run
+  ([`e169bfe`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/e169bfec95dde5058418e86872431f81d59c6b9d))
+
+- **monitoring**: Retrait de la stack locale Prometheus/Grafana, déplacée vers factur-ia-infra
+  ([`6061b25`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/6061b25d7b8dcccb2cd937089dc4770e81c68bf7))
+
+- **tests**: Fixtures partagées de base SQLite et factories métier
+  ([`83bab49`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/83bab49e395192828f205b280974b3e7f34f24ec))
+
+### Documentation
+
+- **rgpd**: Documentation du registre, des purges et de la sécurité
+  ([`e6caef3`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/e6caef38e2d1a927d33e3b5b5c55f101b74e48f5))
+
+### Features
+
+- **ci**: Chaîne de livraison continue vers Cloud Run
+  ([`cad3825`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/cad3825f03502e2dafc362181face43083539af4))
+
+- **infra**: Alertes de santé Grafana provisionnées, avec déclenchement vérifié
+  ([`81213a2`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/81213a2b1eccc41a64f588248c50bddc387995f2))
+
+- **infra**: Sondes de disponibilité /health et /ready pour Cloud Run
+  ([`88dfd5b`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/88dfd5bf3dfb0b17e0302844e6041f3bab68e718))
+
+- **infra**: Tableau de bord local des métriques de l'API (Prometheus/Grafana)
+  ([`071d97b`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/071d97bba67d2d8e8091308b76944856f2d74377))
+
+- **infra**: Traces distribuées OpenTelemetry, désactivées par défaut
+  ([`23cf33b`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/23cf33b01f80d8596b6f955116b32183b945d070))
+
+
 ## v1.11.0 (2026-07-31)
 
 ### Bug Fixes
