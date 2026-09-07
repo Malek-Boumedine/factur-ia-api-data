@@ -18,7 +18,7 @@ import src.utilisateurs.models  # noqa: F401
 
 # Imports spécifiques pour le seeding
 from src.abonnements.models import Abonnement
-from src.auth.models import Role
+from src.auth.models import Permission, PermissionRole, Role
 from src.core.database import async_session_maker
 from src.entreprises.models import RefFormeJuridique
 from src.factures.models import StatutFacture, TauxTva
@@ -51,14 +51,83 @@ ROLES = [
     },
 ]
 
+PERMISSIONS = [
+    {"libelle": "facture:read", "description": "Voir les factures"},
+    {"libelle": "facture:create", "description": "Créer des brouillons de factures"},
+    {"libelle": "facture:update", "description": "Modifier des brouillons"},
+    {"libelle": "facture:validate", "description": "Valider des factures"},
+    {"libelle": "client:read", "description": "Consulter les clients"},
+    {"libelle": "client:write", "description": "Gérer les clients"},
+    {"libelle": "users:read", "description": "Consulter les membres de l'équipe"},
+    {"libelle": "users:create", "description": "Créer un membre de l'équipe"},
+    {"libelle": "users:delete", "description": "Supprimer un membre de l'équipe"},
+    {"libelle": "users:update", "description": "Modifier un membre de l'équipe"},
+    {"libelle": "client:create", "description": "Créer un client"},
+    {"libelle": "client:update", "description": "Modifier un client"},
+    {"libelle": "client:delete", "description": "Supprimer un client"},
+]
+
+# Associations rôle → permissions, par libellé (jamais par id numérique : les
+# identifiants diffèrent d'un environnement à l'autre).
+ROLE_PERMISSIONS: dict[str, list[str]] = {
+    "PROPRIETAIRE": [p["libelle"] for p in PERMISSIONS],
+    "COMPTABLE": [
+        "facture:read",
+        "facture:create",
+        "facture:update",
+        "facture:validate",
+        "client:read",
+        "client:write",
+    ],
+    "COMMERCIAL": [
+        "facture:read",
+        "facture:create",
+        "facture:update",
+        "client:read",
+        "client:write",
+    ],
+    "LECTEUR": ["facture:read", "client:read"],
+}
+
 ABONNEMENTS = [
     {
         "libelle": "GRATUITE",
         "description": "Plan gratuit par défaut attribué à toute nouvelle "
         "entreprise lors de l'onboarding.",
-        "tarif": Decimal("0"),
+        "tarif": Decimal("0.00"),
         "nombre_max_utilisateurs": 1,
         "nombre_max_factures_mois": 10,
+    },
+    {
+        "libelle": "ESSENTIEL",
+        "description": "Pour les indépendants et micro-entrepreneurs qui "
+        "facturent régulièrement.",
+        "tarif": Decimal("11.99"),
+        "nombre_max_utilisateurs": 2,
+        "nombre_max_factures_mois": 50,
+    },
+    {
+        "libelle": "PRO",
+        "description": "Pour les TPE et petites équipes qui gèrent un volume "
+        "de facturation soutenu.",
+        "tarif": Decimal("29.99"),
+        "nombre_max_utilisateurs": 10,
+        "nombre_max_factures_mois": 300,
+    },
+    {
+        "libelle": "BUSINESS",
+        "description": "Pour les PME avec plusieurs collaborateurs et un fort "
+        "volume de factures.",
+        "tarif": Decimal("79.99"),
+        "nombre_max_utilisateurs": 30,
+        "nombre_max_factures_mois": 2000,
+    },
+    {
+        "libelle": "ILLIMITE",
+        "description": "Plan avec un nombre de factures illimité",
+        "tarif": Decimal("149.99"),
+        "nombre_max_utilisateurs": 100,
+        "nombre_max_factures_mois": 10000,
     },
 ]
 
@@ -183,6 +252,51 @@ async def _seed_table(
     await session.commit()
 
 
+async def _seed_role_permissions(session: AsyncSession) -> None:
+    """
+    Associe les rôles à leurs permissions selon `ROLE_PERMISSIONS` (idempotent).
+
+    Les rôles et permissions sont résolus par libellé — jamais par identifiant
+    numérique, les ids variant d'un environnement à l'autre. Les associations
+    déjà présentes sont conservées telles quelles ; seules les manquantes sont
+    insérées. Un libellé introuvable est une erreur de configuration du seed :
+    on échoue explicitement plutôt que de laisser un rôle incomplet en silence.
+    """
+    from sqlmodel import select
+
+    role_ids = {
+        role.libelle: role.id
+        for role in (await session.exec(select(Role))).all()
+        if role.id is not None
+    }
+    permission_ids = {
+        permission.libelle: permission.id
+        for permission in (await session.exec(select(Permission))).all()
+        if permission.id is not None
+    }
+    existing_links = {
+        (link.id_role, link.id_permission)
+        for link in (await session.exec(select(PermissionRole))).all()
+    }
+
+    for role_libelle, permission_libelles in ROLE_PERMISSIONS.items():
+        id_role = role_ids.get(role_libelle)
+        if id_role is None:
+            raise RuntimeError(f"Seed incohérent : rôle '{role_libelle}' introuvable.")
+        for permission_libelle in permission_libelles:
+            id_permission = permission_ids.get(permission_libelle)
+            if id_permission is None:
+                raise RuntimeError(
+                    f"Seed incohérent : permission '{permission_libelle}' introuvable."
+                )
+            if (id_role, id_permission) not in existing_links:
+                session.add(
+                    PermissionRole(id_role=id_role, id_permission=id_permission)
+                )
+
+    await session.commit()
+
+
 async def _seed_admin_plateforme(session: AsyncSession) -> None:
     """
     Seed idempotent du premier administrateur de plateforme (compte racine).
@@ -240,28 +354,39 @@ async def _seed_admin_plateforme(session: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
+async def seed_reference_data(session: AsyncSession) -> None:
+    """Seed idempotent des données de référence (hors admin plateforme)."""
+    print("🌱 Seeding roles...")
+    await _seed_table(session, Role, ROLES, "libelle")
+
+    print("🌱 Seeding permissions...")
+    await _seed_table(session, Permission, PERMISSIONS, "libelle")
+
+    print("🌱 Seeding permission_role...")
+    await _seed_role_permissions(session)
+
+    print("🌱 Seeding abonnements...")
+    await _seed_table(session, Abonnement, ABONNEMENTS, "libelle")
+
+    print("🌱 Seeding taux_tva...")
+    await _seed_table(session, TauxTva, TAUX_TVA, "libelle")
+
+    print("🌱 Seeding ref_forme_juridique...")
+    await _seed_table(session, RefFormeJuridique, FORMES_JURIDIQUES, "code")
+
+    print("🌱 Seeding statut_facture...")
+    await _seed_table(session, StatutFacture, STATUTS_FACTURE, "libelle")
+
+    print("🌱 Seeding statut_declaration...")
+    await _seed_table(session, StatutDeclaration, STATUTS_DECLARATION, "libelle")
+
+    print("🌱 Seeding type_notification...")
+    await _seed_table(session, TypeNotification, TYPES_NOTIFICATION, "libelle")
+
+
 async def run_seeds() -> None:
     async with async_session_maker() as session:
-        print("🌱 Seeding roles...")
-        await _seed_table(session, Role, ROLES, "libelle")
-
-        print("🌱 Seeding abonnements...")
-        await _seed_table(session, Abonnement, ABONNEMENTS, "libelle")
-
-        print("🌱 Seeding taux_tva...")
-        await _seed_table(session, TauxTva, TAUX_TVA, "libelle")
-
-        print("🌱 Seeding ref_forme_juridique...")
-        await _seed_table(session, RefFormeJuridique, FORMES_JURIDIQUES, "code")
-
-        print("🌱 Seeding statut_facture...")
-        await _seed_table(session, StatutFacture, STATUTS_FACTURE, "libelle")
-
-        print("🌱 Seeding statut_declaration...")
-        await _seed_table(session, StatutDeclaration, STATUTS_DECLARATION, "libelle")
-
-        print("🌱 Seeding type_notification...")
-        await _seed_table(session, TypeNotification, TYPES_NOTIFICATION, "libelle")
+        await seed_reference_data(session)
 
         print("🌱 Seeding admin plateforme...")
         await _seed_admin_plateforme(session)
