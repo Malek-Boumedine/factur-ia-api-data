@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.12.2 (2026-09-07)
+
+### Bug Fixes
+
+- **core**: Seed complet des permissions, associations rôles et plans d'abonnement
+  ([`c066f8d`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/c066f8d17f0be432dec4de90b730550c1754d4a7))
+
+### Documentation
+
+- Allège le README et ajoute la procédure d'installation
+  ([`72d7ae1`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/72d7ae168603d57a0d44e96e5e4d85687db5c620))
+
+
 ## v1.12.1 (2026-08-31)
 
 ### Bug Fixes
