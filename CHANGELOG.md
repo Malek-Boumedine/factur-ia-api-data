@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.12.3 (2026-09-14)
+
+### Bug Fixes
+
+- **sirene**: Gère les entreprises sans dirigeant déclaré
+  ([`02ed352`](https://github.com/Malek-Boumedine/factur-ia-api-data/commit/02ed352f4d0a6f490fa8201bf09930a30dd10c29))
+
+
 ## v1.12.2 (2026-09-07)
 
 ### Bug Fixes
