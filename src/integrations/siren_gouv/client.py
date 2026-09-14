@@ -49,6 +49,7 @@ async def get_company_by_identifier(identifier: str) -> dict[str, Any] | None:
                 if not clean_address or "NON-DIFFUSIBLE" in clean_address:
                     clean_address = None
 
+                leader = (company.get("dirigeants") or [{}])[0]
                 return {
                     # L'API renvoie toujours le SIRET du siège,
                     # même si on a cherché par SIREN
@@ -62,11 +63,9 @@ async def get_company_by_identifier(identifier: str) -> dict[str, Any] | None:
                     "ville": headquarters.get("libelle_commune"),
                     "numero_tva": company.get("numero_tva_intracommunautaire"),
                     "activite_principale": headquarters.get("activite_principale"),
-                    "nom_dirigeant": company.get("dirigeants")[0].get("nom"),
-                    "prenom_dirigeant": company.get("dirigeants")[0].get("prenoms"),
-                    "type_dirigeant": company.get("dirigeants")[0].get(
-                        "type_dirigeant"
-                    ),
+                    "nom_dirigeant": leader.get("nom"),
+                    "prenom_dirigeant": leader.get("prenoms"),
+                    "type_dirigeant": leader.get("type_dirigeant"),
                 }
 
             return None

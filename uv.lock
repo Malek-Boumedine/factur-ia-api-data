@@ -515,7 +515,7 @@ wheels = [
 
 [[package]]
 name = "factur-ia-api-data"
-version = "1.11.0"
+version = "1.12.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiomysql" },
